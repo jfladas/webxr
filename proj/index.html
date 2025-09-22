@@ -6,13 +6,29 @@
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>webxr</title>
+  <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
 </head>
 
 <body>
   <!-- <div id="app"></div>
   <script type="module" src="/src/main.ts"></script> -->
-  <h1>Hey!</h1>
-  <p>This is a WebXR project.</p>
+  <h1>A-Frame</h1>
+  <a-scene>
+    <a-entity light="type:directional; castShadow:true;" position="1 1 1"></a-entity>
+    <a-assets>
+      <img id="birdo" src="/public/birdo.png" />
+      <img id="sky" src="sky.png">
+    </a-assets>
+
+    <a-box position="-1 0.5 -3" rotation="0 0 0" material="src: #birdo"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 1000; easing: linear"
+      animation__2="property: scale; to: 1.5 1.5 1.5; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate"></a-box>
+    <a-sphere position="1 4 -3" radius="2" material="shader: flat; color: red; opacity: 0.5;"></a-sphere>
+    <a-cylinder position="1 1.75 -3" radius="0.5" height="1" color="pink"></a-cylinder>
+    <a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="grey"></a-plane>
+    <a-sky src="#sky"></a-sky>
+    <a-text value="A-Frame!" position="0 3 -2" color="#000000"></a-text>
+  </a-scene>
 </body>
 
 </html>
