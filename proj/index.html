@@ -10,15 +10,17 @@
 </head>
 
 <body>
-  <!-- <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script> -->
   <h1>A-Frame</h1>
   <a-scene>
     <a-entity light="type:directional; castShadow:true;" position="1 1 1"></a-entity>
     <a-assets>
-      <img id="birdo" src="/public/birdo.png" />
+      <img id="birdo" src="birdo.png" />
       <img id="sky" src="sky.png">
+      <a-asset-item id="me" src="me.glb"></a-asset-item>
     </a-assets>
+
+    <a-entity gltf-model="#me" position="0 0 -3"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"></a-entity>
 
     <a-box position="-1 0.5 -3" rotation="0 0 0" material="src: #birdo"
       animation="property: rotation; to: 0 360 0; loop: true; dur: 1000; easing: linear"
