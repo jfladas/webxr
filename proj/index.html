@@ -7,6 +7,42 @@
   <title>webxr</title>
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+  <script>
+    AFRAME.registerComponent('phoenix-flight', {
+      init: function () {
+        this.isFlying = false;
+
+        const scene = document.querySelector('a-scene');
+        scene.addEventListener('click', this.triggerFlight.bind(this));
+      },
+
+      triggerFlight: function () {
+        if (this.isFlying) return;
+
+        this.isFlying = true;
+        const currentPos = this.el.getAttribute('position');
+
+        const startPos = `-10 ${currentPos.y} ${currentPos.z}`;
+        const endPos = `10 ${currentPos.y} ${currentPos.z}`;
+        const flyDur = 4000;
+
+        this.el.setAttribute('position', startPos);
+
+        this.el.setAttribute('animation__fly', {
+          property: 'position',
+          to: endPos,
+          dur: flyDur,
+          easing: 'easeInOutQuad'
+        });
+
+        setTimeout(() => {
+          this.el.setAttribute('position', this.currentPos);
+          this.el.removeAttribute('animation__fly');
+          this.isFlying = false;
+        }, flyDur);
+      }
+    });
+  </script>
 </head>
 
 <body>
@@ -23,7 +59,8 @@
     <a-entity gltf-model="#me" position="0 0 -3"
       animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"></a-entity>
 
-    <a-entity gltf-model="#phoenix" position="0 3 -6" scale="0.01 0.01 0.01" animation-mixer></a-entity>
+    <a-entity gltf-model="#phoenix" position="-10 3 -6" scale="0.01 0.01 0.01" animation-mixer
+      phoenix-flight></a-entity>
 
     <a-box position="-1 0.5 -3" rotation="0 0 0" material="src: #birdo"
       animation="property: rotation; to: 0 360 0; loop: true; dur: 1000; easing: linear"
