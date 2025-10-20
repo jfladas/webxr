@@ -4,30 +4,45 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>temp_mindar</title>
+  <title>mindar</title>
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 </head>
 
 <body>
   <h1>MindAR Template</h1>
-  <a-scene
-    mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;"
-    color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
+  <a-scene mindar-image="imageTargetSrc: public/targets.mind; maxTrack: 6" color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
     <a-assets>
-      <img id="card"
-        src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" />
-      <a-asset-item id="avatarModel"
-        src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
     </a-assets>
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
     <a-entity mindar-image-target="targetIndex: 0">
-      <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
-      <a-gltf-model rotation="0 0 0 " position="0 0 0.1" scale="0.005 0.005 0.005" src="#avatarModel"
-        animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate">
+      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#7BC8A4" opacity="0.7"></a-plane>
+      <a-cylinder position="0 0 0.1" radius="0.1" height="0.2" color="#7BC8A4"></a-cylinder>
     </a-entity>
+    <a-entity mindar-image-target="targetIndex: 1">
+      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#EF2D5E" opacity="0.7"></a-plane>
+      <a-sphere position="0 0 0.1" radius="0.2" color="#EF2D5E"></a-sphere>
+    </a-entity>
+    <a-entity mindar-image-target="targetIndex: 2">
+      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#4CC3D9" opacity="0.7"></a-plane>
+      <a-box position="0 0 0.1" rotation="0 45 0" color="#4CC3D9" depth="0.2" height="0.2" width="0.2"></a-cube>
+    </a-entity>
+    <a-entity mindar-image-target="targetIndex: 3">
+      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#FFC65D" opacity="0.7"></a-plane>
+      <a-torus position="0 0 0.1" radius="0.05" radius-tubular="0.01" color=" #FFC65D"></a-torus>
+    </a-entity>
+    <a-entity mindar-image-target="targetIndex: 4">
+      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#39A0ED" opacity="0.7"></a-plane>
+      <a-cone position="0 0 0.1" radius-bottom="0.1" height="0.2" color="#39A0ED"></a-cone>
+    </a-entity>
+    <a-entity mindar-image-target="targetIndex: 5">
+      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#FF6F61>" opacity="0.7"></a-plane>
+      <a-dodecahedron position="0 0 0.1" radius="0.2" color="#FF6F61"></a-dodecahedron>
+    </a-entity>
+
   </a-scene>
 </body>
 
