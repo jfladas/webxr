@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TD</title>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+</head>
+
+<body>
+  <h1>MindAR Tower Defense</h1>
+  <p>Point your camera at the AR markers. Base (yellow) spawns enemies, Tower (red) defends!</p>
+  <a-scene mindar-image="imageTargetSrc: /targets.mind; maxTrack: 4" color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+    <a-assets>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <!-- Base (Target 0) - Yellow Icosahedron -->
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-icosahedron position="0 0 0" radius="0.5" color="yellow" opacity="0.7"></a-icosahedron>
+      <a-text value="BASE" position="0 0.8 0" align="center" color="white" scale="2 2 2"></a-text>
+    </a-entity>
+
+    <!-- Tower (Target 1) - Red Sphere with Range Circle -->
+    <a-entity mindar-image-target="targetIndex: 1">
+      <!-- Tower range indicator (circle) -->
+      <a-ring position="0 0 0" radius-inner="1.4" radius-outer="1.5" color="#EF2D5E" opacity="0.3"></a-ring>
+      <!-- Tower base circle -->
+      <a-circle position="0 0 0.01" radius="0.3" color="#EF2D5E" opacity="0.7"></a-circle>
+      <!-- Tower -->
+      <a-sphere position="0 0 0.1" radius="0.2" color="#EF2D5E"></a-sphere>
+      <a-text value="TOWER" position="0 0.8 0" align="center" color="white" scale="2 2 2"></a-text>
+    </a-entity>
+
+    <!-- 
+    <a-entity mindar-image-target="targetIndex: 2">
+      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#4CC3D9" opacity="0.7"></a-plane>
+      <a-box position="0 0 0.1" rotation="0 45 0" color="#4CC3D9" depth="0.2" height="0.2" width="0.2"></a-cube>
+    </a-entity>
+    <a-entity mindar-image-target="targetIndex: 3">
+      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#39A0ED" opacity="0.7"></a-plane>
+      <a-cone position="0 0 0.1" radius-bottom="0.1" height="0.2" color="#39A0ED"></a-cone>
+    </a-entity> 
+    -->
+  </a-scene>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
