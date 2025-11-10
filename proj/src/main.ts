@@ -1,9 +1,14 @@
 interface Enemy {
   id: string;
   entity: any;
-  targetPosition: { x: number; y: number; z: number };
+  targetPosition: { x: number; y: number };
   speed: number;
   health: number;
+}
+
+interface Position2D {
+  x: number;
+  y: number;
 }
 
 class TowerDefenseGame {
@@ -20,6 +25,7 @@ class TowerDefenseGame {
   private readonly ENEMY_SPEED = 0.5;
   private readonly SPAWN_DISTANCE = 5;
   private readonly TOWER_RANGE = 1000;
+  private readonly GAME_Z_PLANE = 0;
 
   constructor() {
     this.init();
@@ -117,14 +123,17 @@ class TowerDefenseGame {
     const spawnX = Math.cos(spawnAngle) * this.SPAWN_DISTANCE;
     const spawnY = Math.sin(spawnAngle) * this.SPAWN_DISTANCE;
 
-    enemyEntity.setAttribute("position", `${spawnX} ${spawnY} 0`);
+    enemyEntity.setAttribute(
+      "position",
+      `${spawnX} ${spawnY} ${this.GAME_Z_PLANE}`
+    );
 
     this.baseTarget.appendChild(enemyEntity);
 
     const enemy: Enemy = {
       id: enemyId,
       entity: enemyEntity,
-      targetPosition: { x: 0, y: 0, z: 0 },
+      targetPosition: { x: 0, y: 0 },
       speed: this.ENEMY_SPEED,
       health: 1,
     };
@@ -168,6 +177,7 @@ class TowerDefenseGame {
     this.enemies.forEach((enemy, enemyId) => {
       const currentPos = enemy.entity.getAttribute("position");
 
+      // 2D movement calculation since everything is on same Z-plane
       const direction = {
         x: enemy.targetPosition.x - currentPos.x,
         y: enemy.targetPosition.y - currentPos.y,
@@ -189,7 +199,7 @@ class TowerDefenseGame {
       const newPosition = {
         x: currentPos.x + normalizedDirection.x * enemy.speed * deltaTime,
         y: currentPos.y + normalizedDirection.y * enemy.speed * deltaTime,
-        z: 0,
+        z: this.GAME_Z_PLANE, // Keep on same Z-plane
       };
 
       enemy.entity.setAttribute(
@@ -229,40 +239,38 @@ class TowerDefenseGame {
     const towerWorldPosition = this.getMarkerWorldPosition(this.towerTarget);
 
     if (baseWorldPosition && towerWorldPosition) {
+      // Calculate distance and relative position (2D since same Z-plane)
       const relativePosition = {
         x: towerWorldPosition.x - baseWorldPosition.x,
         y: towerWorldPosition.y - baseWorldPosition.y,
-        z: towerWorldPosition.z - baseWorldPosition.z,
       };
 
-      const distance = Math.sqrt(
-        relativePosition.x ** 2 +
-          relativePosition.y ** 2 +
-          relativePosition.z ** 2
+      const distance = this.calculateDistance2D(
+        baseWorldPosition,
+        towerWorldPosition
       );
 
-      console.log(`Marker positions:
+      console.log(`Marker positions (2D - same Z-plane):
         Base: (${baseWorldPosition.x.toFixed(3)}, ${baseWorldPosition.y.toFixed(
         3
-      )}, ${baseWorldPosition.z.toFixed(3)})
+      )})
         Tower: (${towerWorldPosition.x.toFixed(
           3
-        )}, ${towerWorldPosition.y.toFixed(3)}, ${towerWorldPosition.z.toFixed(
-        3
-      )})
+        )}, ${towerWorldPosition.y.toFixed(3)})
         Relative: (${relativePosition.x.toFixed(
           3
-        )}, ${relativePosition.y.toFixed(3)}, ${relativePosition.z.toFixed(3)})
+        )}, ${relativePosition.y.toFixed(3)})
         Distance: ${distance.toFixed(3)} units`);
 
+      // Use game Z-plane with small offset for line visibility
       this.connectionLine.setAttribute(
         "line",
         `
           start: ${baseWorldPosition.x} ${baseWorldPosition.y} ${
-          baseWorldPosition.z + 0.1
+          this.GAME_Z_PLANE + 0.1
         };
           end: ${towerWorldPosition.x} ${towerWorldPosition.y} ${
-          towerWorldPosition.z + 0.1
+          this.GAME_Z_PLANE + 0.1
         };
           color: yellow;
           opacity: 0.5
@@ -290,9 +298,7 @@ class TowerDefenseGame {
     );
   }
 
-  private getMarkerWorldPosition(
-    marker: any
-  ): { x: number; y: number; z: number } | null {
+  private getMarkerWorldPosition(marker: any): Position2D | null {
     if (!marker || !marker.object3D) {
       return null;
     }
@@ -302,10 +308,10 @@ class TowerDefenseGame {
       new (window as any).THREE.Vector3()
     );
 
+    // Return only X,Y since everything is on the same Z-plane
     return {
       x: worldPosition.x,
       y: worldPosition.y,
-      z: worldPosition.z,
     };
   }
 
@@ -319,9 +325,10 @@ class TowerDefenseGame {
 
     const towerWorldPosition = this.getMarkerWorldPosition(this.towerTarget);
     if (towerWorldPosition) {
+      // Use game Z-plane for range circle
       this.towerRangeCircle.setAttribute(
         "position",
-        `${towerWorldPosition.x} ${towerWorldPosition.y} ${towerWorldPosition.z}`
+        `${towerWorldPosition.x} ${towerWorldPosition.y} ${this.GAME_Z_PLANE}`
       );
       this.towerRangeCircle.setAttribute("visible", "true");
     }
@@ -343,7 +350,7 @@ class TowerDefenseGame {
     this.enemies.forEach((enemy, enemyId) => {
       const enemyWorldPosition = this.getEnemyWorldPosition(enemy);
       if (enemyWorldPosition) {
-        const distance = this.calculateDistance3D(
+        const distance = this.calculateDistance2D(
           towerWorldPosition,
           enemyWorldPosition
         );
@@ -366,9 +373,7 @@ class TowerDefenseGame {
     });
   }
 
-  private getEnemyWorldPosition(
-    enemy: Enemy
-  ): { x: number; y: number; z: number } | null {
+  private getEnemyWorldPosition(enemy: Enemy): Position2D | null {
     if (!enemy.entity || !enemy.entity.object3D) {
       return null;
     }
@@ -377,36 +382,29 @@ class TowerDefenseGame {
       new (window as any).THREE.Vector3()
     );
 
+    // Return only X,Y since everything is on the same Z-plane
     return {
       x: worldPosition.x,
       y: worldPosition.y,
-      z: worldPosition.z,
     };
   }
 
-  private calculateDistance3D(
-    pos1: { x: number; y: number; z: number },
-    pos2: { x: number; y: number; z: number }
-  ): number {
+  private calculateDistance2D(pos1: Position2D, pos2: Position2D): number {
     const dx = pos2.x - pos1.x;
     const dy = pos2.y - pos1.y;
-    const dz = pos2.z - pos1.z;
-    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
-  private createAttackEffect(
-    towerPos: { x: number; y: number; z: number },
-    enemyPos: { x: number; y: number; z: number }
-  ) {
-    // Create a temporary laser beam effect
+  private createAttackEffect(towerPos: Position2D, enemyPos: Position2D) {
+    // Create a temporary laser beam effect on game Z-plane
     const laser = document.createElement("a-entity");
     laser.setAttribute(
       "line",
       `
-      start: ${towerPos.x} ${towerPos.y} ${towerPos.z + 0.1};
-      end: ${enemyPos.x} ${enemyPos.y} ${enemyPos.z + 0.1};
+      start: ${towerPos.x} ${towerPos.y} ${this.GAME_Z_PLANE + 0.1};
+      end: ${enemyPos.x} ${enemyPos.y} ${this.GAME_Z_PLANE + 0.1};
       color: red;
-      opacity: 0.5
+      opacity: 0.8
     `
     );
     this.scene.appendChild(laser);
