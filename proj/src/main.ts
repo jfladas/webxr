@@ -20,6 +20,18 @@ class TowerDefenseGame {
   private spawnInterval: number | null = null;
   private gameLoop: number | null = null;
 
+  // Game state
+  private health = 100;
+  private points = 0;
+  private gameOver = false;
+
+  // UI elements
+  private healthElement: HTMLElement | null = null;
+  private pointsElement: HTMLElement | null = null;
+  private gameOverScreen: HTMLElement | null = null;
+  private finalScoreElement: HTMLElement | null = null;
+  private restartButton: HTMLElement | null = null;
+
   // Tower state tracking
   private towerSphere: any = null;
   private towerCircle: any = null;
@@ -44,6 +56,20 @@ class TowerDefenseGame {
   private init() {
     document.addEventListener("DOMContentLoaded", () => {
       this.scene = document.querySelector("a-scene");
+
+      // Initialize UI elements
+      this.healthElement = document.getElementById("health-value");
+      this.pointsElement = document.getElementById("points-value");
+      this.gameOverScreen = document.getElementById("game-over-screen");
+      this.finalScoreElement = document.getElementById("final-score");
+      this.restartButton = document.getElementById("restart-btn");
+
+      // Add restart button listener
+      if (this.restartButton) {
+        this.restartButton.addEventListener("click", () => {
+          this.restartGame();
+        });
+      }
 
       if (this.scene.hasLoaded) {
         this.setupGame();
@@ -111,6 +137,10 @@ class TowerDefenseGame {
   }
 
   private spawnEnemy() {
+    if (this.gameOver) {
+      return;
+    }
+
     if (!this.isBaseVisible()) {
       console.log("Base not visible, skipping enemy spawn");
       return;
@@ -168,6 +198,10 @@ class TowerDefenseGame {
   }
 
   private updateEnemies() {
+    if (this.gameOver) {
+      return;
+    }
+
     const deltaTime = 1 / 60;
 
     if (this.isTowerVisible() && this.isBaseVisible()) {
@@ -189,8 +223,11 @@ class TowerDefenseGame {
       const distance = Math.sqrt(direction.x ** 2 + direction.y ** 2);
 
       if (distance < 0.2) {
+        this.takeDamage(10); // Enemy deals 10 damage
         this.destroyEnemy(enemyId);
-        console.log(`Enemy ${enemyId} reached the base!`);
+        console.log(
+          `Enemy ${enemyId} reached the base! Health: ${this.health}`
+        );
         return;
       }
 
@@ -273,7 +310,11 @@ class TowerDefenseGame {
     });
 
     enemiesToDestroy.forEach((enemyId) => {
+      this.addPoints(10); // 10 points per enemy kill
       this.destroyEnemy(enemyId);
+      console.log(
+        `Enemy ${enemyId} destroyed by tower! Points: ${this.points}`
+      );
     });
   }
 
@@ -516,6 +557,89 @@ class TowerDefenseGame {
     };
 
     return relativePos;
+  }
+
+  private takeDamage(damage: number) {
+    if (this.gameOver) return;
+
+    this.health -= damage;
+    this.health = Math.max(0, this.health);
+    this.updateHealthDisplay();
+
+    if (this.health <= 0) {
+      this.endGame();
+    }
+  }
+
+  private addPoints(points: number) {
+    if (this.gameOver) return;
+
+    this.points += points;
+    this.updatePointsDisplay();
+  }
+
+  private updateHealthDisplay() {
+    if (this.healthElement) {
+      this.healthElement.textContent = this.health.toString();
+
+      // Change color when health is low
+      if (this.health <= 30) {
+        this.healthElement.classList.add("low");
+      } else {
+        this.healthElement.classList.remove("low");
+      }
+    }
+  }
+
+  private updatePointsDisplay() {
+    if (this.pointsElement) {
+      this.pointsElement.textContent = this.points.toString();
+    }
+  }
+
+  private endGame() {
+    this.gameOver = true;
+
+    // Stop enemy spawning
+    this.stopEnemySpawning();
+
+    // Show game over screen
+    if (this.gameOverScreen && this.finalScoreElement) {
+      this.finalScoreElement.textContent = this.points.toString();
+      this.gameOverScreen.style.display = "block";
+    }
+
+    console.log(`Game Over! Final Score: ${this.points}`);
+  }
+
+  private restartGame() {
+    // Reset game state
+    this.health = 100;
+    this.points = 0;
+    this.gameOver = false;
+
+    // Clear all enemies
+    this.enemies.forEach((_, enemyId) => {
+      this.destroyEnemy(enemyId);
+    });
+
+    // Reset enemy counter
+    this.enemyIdCounter = 0;
+
+    // Update UI
+    this.updateHealthDisplay();
+    this.updatePointsDisplay();
+
+    // Hide game over screen
+    if (this.gameOverScreen) {
+      this.gameOverScreen.style.display = "none";
+    }
+
+    // Reset tower state
+    this.towerIsMoving = false;
+    this.resetTowerState();
+
+    console.log("Game restarted!");
   }
 
   public cleanup() {
