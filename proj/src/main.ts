@@ -19,11 +19,10 @@ class TowerDefenseGame {
   private enemyIdCounter = 0;
   private spawnInterval: number | null = null;
   private gameLoop: number | null = null;
-  private connectionLine: any = null;
-  private towerRangeCircle: any = null;
 
   private readonly ENEMY_SPEED = 0.5;
   private readonly SPAWN_DISTANCE = 5;
+  private readonly SPAWN_TIME = 2000;
   private readonly TOWER_RANGE = 1000;
   private readonly GAME_Z_PLANE = 0;
 
@@ -60,28 +59,22 @@ class TowerDefenseGame {
 
     console.log("Tower Defense Game initialized");
 
-    this.createConnectionLine();
-
     this.baseTarget.addEventListener("targetFound", () => {
       console.log("Base target found - starting enemy spawning");
       this.startEnemySpawning();
-      this.updateConnectionLine();
     });
 
     this.baseTarget.addEventListener("targetLost", () => {
       console.log("Base target lost - stopping enemy spawning");
       this.stopEnemySpawning();
-      this.hideConnectionLine();
     });
 
     this.towerTarget.addEventListener("targetFound", () => {
       console.log("Tower target found");
-      this.updateConnectionLine();
     });
 
     this.towerTarget.addEventListener("targetLost", () => {
       console.log("Tower target lost");
-      this.hideConnectionLine();
     });
 
     this.startGameLoop();
@@ -92,7 +85,7 @@ class TowerDefenseGame {
 
     this.spawnInterval = window.setInterval(() => {
       this.spawnEnemy();
-    }, 100);
+    }, this.SPAWN_TIME);
   }
 
   private stopEnemySpawning() {
@@ -165,19 +158,11 @@ class TowerDefenseGame {
   private updateEnemies() {
     const deltaTime = 1 / 60;
 
-    // Update connection line between markers
-    this.updateConnectionLine();
-
-    // Update tower range circle position
-    this.updateTowerRangeCircle();
-
-    // Check for tower attacks first
     this.checkTowerAttacks();
 
     this.enemies.forEach((enemy, enemyId) => {
       const currentPos = enemy.entity.getAttribute("position");
 
-      // 2D movement calculation since everything is on same Z-plane
       const direction = {
         x: enemy.targetPosition.x - currentPos.x,
         y: enemy.targetPosition.y - currentPos.y,
@@ -199,7 +184,7 @@ class TowerDefenseGame {
       const newPosition = {
         x: currentPos.x + normalizedDirection.x * enemy.speed * deltaTime,
         y: currentPos.y + normalizedDirection.y * enemy.speed * deltaTime,
-        z: this.GAME_Z_PLANE, // Keep on same Z-plane
+        z: this.GAME_Z_PLANE,
       };
 
       enemy.entity.setAttribute(
@@ -223,73 +208,6 @@ class TowerDefenseGame {
     }
   }
 
-  private createConnectionLine() {
-    this.connectionLine = document.createElement("a-entity");
-    this.connectionLine.setAttribute("id", "marker-connection-line");
-    this.connectionLine.setAttribute("visible", "false");
-    this.scene.appendChild(this.connectionLine);
-  }
-
-  private updateConnectionLine() {
-    if (!this.connectionLine || !this.areMarkersVisible()) {
-      return;
-    }
-
-    const baseWorldPosition = this.getMarkerWorldPosition(this.baseTarget);
-    const towerWorldPosition = this.getMarkerWorldPosition(this.towerTarget);
-
-    if (baseWorldPosition && towerWorldPosition) {
-      // Calculate distance and relative position (2D since same Z-plane)
-      const relativePosition = {
-        x: towerWorldPosition.x - baseWorldPosition.x,
-        y: towerWorldPosition.y - baseWorldPosition.y,
-      };
-
-      const distance = this.calculateDistance2D(
-        baseWorldPosition,
-        towerWorldPosition
-      );
-
-      console.log(`Marker positions (2D - same Z-plane):
-        Base: (${baseWorldPosition.x.toFixed(3)}, ${baseWorldPosition.y.toFixed(
-        3
-      )})
-        Tower: (${towerWorldPosition.x.toFixed(
-          3
-        )}, ${towerWorldPosition.y.toFixed(3)})
-        Relative: (${relativePosition.x.toFixed(
-          3
-        )}, ${relativePosition.y.toFixed(3)})
-        Distance: ${distance.toFixed(3)} units`);
-
-      // Use game Z-plane with small offset for line visibility
-      this.connectionLine.setAttribute(
-        "line",
-        `
-          start: ${baseWorldPosition.x} ${baseWorldPosition.y} ${
-          this.GAME_Z_PLANE + 0.1
-        };
-          end: ${towerWorldPosition.x} ${towerWorldPosition.y} ${
-          this.GAME_Z_PLANE + 0.1
-        };
-          color: yellow;
-          opacity: 0.5
-        `
-      );
-      this.connectionLine.setAttribute("visible", "true");
-    }
-  }
-
-  private hideConnectionLine() {
-    if (this.connectionLine) {
-      this.connectionLine.setAttribute("visible", "false");
-    }
-  }
-
-  private areMarkersVisible(): boolean {
-    return this.isBaseVisible() && this.isTowerVisible();
-  }
-
   private isTowerVisible(): boolean {
     return (
       this.towerTarget &&
@@ -303,35 +221,14 @@ class TowerDefenseGame {
       return null;
     }
 
-    // Get the world position of the marker using A-Frame's method
     const worldPosition = marker.object3D.getWorldPosition(
       new (window as any).THREE.Vector3()
     );
 
-    // Return only X,Y since everything is on the same Z-plane
     return {
       x: worldPosition.x,
       y: worldPosition.y,
     };
-  }
-
-  private updateTowerRangeCircle() {
-    if (!this.towerRangeCircle || !this.isTowerVisible()) {
-      if (this.towerRangeCircle) {
-        this.towerRangeCircle.setAttribute("visible", "false");
-      }
-      return;
-    }
-
-    const towerWorldPosition = this.getMarkerWorldPosition(this.towerTarget);
-    if (towerWorldPosition) {
-      // Use game Z-plane for range circle
-      this.towerRangeCircle.setAttribute(
-        "position",
-        `${towerWorldPosition.x} ${towerWorldPosition.y} ${this.GAME_Z_PLANE}`
-      );
-      this.towerRangeCircle.setAttribute("visible", "true");
-    }
   }
 
   private checkTowerAttacks() {
@@ -344,7 +241,6 @@ class TowerDefenseGame {
       return;
     }
 
-    // Check each enemy for tower range
     const enemiesToDestroy: string[] = [];
 
     this.enemies.forEach((enemy, enemyId) => {
@@ -361,13 +257,12 @@ class TowerDefenseGame {
               3
             )}`
           );
+          this.createAttackLine(enemy);
           enemiesToDestroy.push(enemyId);
-          this.createAttackEffect(towerWorldPosition, enemyWorldPosition);
         }
       }
     });
 
-    // Destroy enemies that were in range
     enemiesToDestroy.forEach((enemyId) => {
       this.destroyEnemy(enemyId);
     });
@@ -395,26 +290,99 @@ class TowerDefenseGame {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  private createAttackEffect(towerPos: Position2D, enemyPos: Position2D) {
-    // Create a temporary laser beam effect on game Z-plane
-    const laser = document.createElement("a-entity");
-    laser.setAttribute(
-      "line",
-      `
-      start: ${towerPos.x} ${towerPos.y} ${this.GAME_Z_PLANE + 0.1};
-      end: ${enemyPos.x} ${enemyPos.y} ${this.GAME_Z_PLANE + 0.1};
-      color: red;
-      opacity: 0.8
-    `
-    );
-    this.scene.appendChild(laser);
+  private createAttackLine(enemy: Enemy) {
+    const enemyPos = enemy.entity.getAttribute("position");
 
-    // Remove the laser after a short time
+    const towerPos = this.getTowerPosition();
+
+    if (!towerPos) {
+      console.log("Could not get tower position");
+      return;
+    }
+
+    console.log(
+      `Creating attack line from tower (${towerPos.x.toFixed(
+        3
+      )}, ${towerPos.y.toFixed(3)}) to enemy (${enemyPos.x.toFixed(
+        3
+      )}, ${enemyPos.y.toFixed(3)})`
+    );
+
+    const lineEntity = document.createElement("a-entity");
+
+    const distance = Math.sqrt(
+      (enemyPos.x - towerPos.x) ** 2 + (enemyPos.y - towerPos.y) ** 2
+    );
+    const angle = Math.atan2(enemyPos.y - towerPos.y, enemyPos.x - towerPos.x);
+
+    const midpoint = {
+      x: (towerPos.x + enemyPos.x) / 2,
+      y: (towerPos.y + enemyPos.y) / 2,
+      z: this.GAME_Z_PLANE + 0.01,
+    };
+
+    lineEntity.setAttribute(
+      "geometry",
+      `primitive: cylinder; radius: 0.005; height: ${distance}`
+    );
+    lineEntity.setAttribute("material", "color: #ff0000; opacity: 0.5");
+
+    lineEntity.setAttribute(
+      "position",
+      `${midpoint.x} ${midpoint.y} ${midpoint.z}`
+    );
+    lineEntity.setAttribute("rotation", `0 0 ${(angle * 180) / Math.PI - 90}`);
+
+    this.baseTarget.appendChild(lineEntity);
+
+    console.log(
+      `Attack line created in world space - distance: ${distance.toFixed(
+        3
+      )}, angle: ${angle.toFixed(3)}, midpoint: (${midpoint.x.toFixed(
+        3
+      )}, ${midpoint.y.toFixed(3)})`
+    );
+
     setTimeout(() => {
-      if (laser.parentNode) {
-        laser.parentNode.removeChild(laser);
+      if (lineEntity.parentNode) {
+        lineEntity.parentNode.removeChild(lineEntity);
+        console.log("Attack line removed");
       }
-    }, 200);
+    }, 100);
+  }
+
+  private getTowerPosition(): Position2D | null {
+    if (
+      !this.baseTarget ||
+      !this.towerTarget ||
+      !this.baseTarget.object3D ||
+      !this.towerTarget.object3D
+    ) {
+      return null;
+    }
+
+    // Get the tower's world position
+    const towerWorldPos = this.towerTarget.object3D.getWorldPosition(
+      new (window as any).THREE.Vector3()
+    );
+
+    // Convert tower world position to base target's local coordinates
+    const towerPos = this.baseTarget.object3D.worldToLocal(
+      towerWorldPos.clone()
+    );
+
+    const relativePos = {
+      x: towerPos.x,
+      y: towerPos.y,
+    };
+
+    console.log(
+      `Tower local position in base coordinate system: (${relativePos.x.toFixed(
+        3
+      )}, ${relativePos.y.toFixed(3)})`
+    );
+
+    return relativePos;
   }
 
   public cleanup() {
@@ -427,12 +395,6 @@ class TowerDefenseGame {
     this.enemies.forEach((_, enemyId) => {
       this.destroyEnemy(enemyId);
     });
-    if (this.connectionLine && this.connectionLine.parentNode) {
-      this.connectionLine.parentNode.removeChild(this.connectionLine);
-    }
-    if (this.towerRangeCircle && this.towerRangeCircle.parentNode) {
-      this.towerRangeCircle.parentNode.removeChild(this.towerRangeCircle);
-    }
   }
 }
 
