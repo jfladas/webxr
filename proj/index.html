@@ -20,15 +20,16 @@
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- Base (Target 0) - Yellow Icosahedron -->
+    <!-- Base (Target 0) - Silver Icosahedron -->
     <a-entity mindar-image-target="targetIndex: 0">
-      <a-icosahedron position="0 0 0" radius="0.5" color="yellow" opacity="0.7"></a-icosahedron>
+      <a-icosahedron position="0 0 0" radius="0.5" color="white" opacity="1" metalness="0.5" roughness="0.3"
+        animation="property: rotation; to: 0 0 360; loop: true; dur: 10000; elasticity: 0; easing: linear"></a-icosahedron>
     </a-entity>
 
     <!-- Tower (Target 1) - Red Sphere with Range Circle -->
     <a-entity mindar-image-target="targetIndex: 1">
       <a-circle position="0 0 0.01" radius="1" color="red" opacity="0.1"></a-circle>
-      <a-sphere position="0 0 0.1" radius="0.2" color="red" opacity="0.7"></a-sphere>
+      <a-sphere position="0 0 0.1" radius="0.2" color="red" roughness="1"></a-sphere>
     </a-entity>
 
     <!-- 

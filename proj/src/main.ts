@@ -20,6 +20,17 @@ class TowerDefenseGame {
   private spawnInterval: number | null = null;
   private gameLoop: number | null = null;
 
+  // Tower state tracking
+  private towerSphere: any = null;
+  private towerCircle: any = null;
+  private towerMovingText: any = null;
+  private towerHomePosition: Position2D | null = null;
+  private lastTowerPosition: Position2D | null = null;
+  private towerIsMoving = false;
+  private lastMovementTime = 0;
+  private readonly MOVEMENT_THRESHOLD = 0.3;
+  private readonly STABILITY_TIME = 4000;
+
   private readonly ENEMY_SPEED = 0.5;
   private readonly SPAWN_DISTANCE = 5;
   private readonly SPAWN_TIME = 2000;
@@ -60,21 +71,24 @@ class TowerDefenseGame {
     console.log("Tower Defense Game initialized");
 
     this.baseTarget.addEventListener("targetFound", () => {
-      console.log("Base target found - starting enemy spawning");
       this.startEnemySpawning();
     });
 
     this.baseTarget.addEventListener("targetLost", () => {
-      console.log("Base target lost - stopping enemy spawning");
       this.stopEnemySpawning();
     });
 
     this.towerTarget.addEventListener("targetFound", () => {
-      console.log("Tower target found");
+      this.setupTowerVisuals();
+
+      if (this.towerIsMoving) {
+        this.setTowerActive(false);
+      }
+      this.towerHomePosition = null;
     });
 
     this.towerTarget.addEventListener("targetLost", () => {
-      console.log("Tower target lost");
+      this.handleTowerLost();
     });
 
     this.startGameLoop();
@@ -108,9 +122,7 @@ class TowerDefenseGame {
     enemyEntity.setAttribute("id", enemyId);
     enemyEntity.setAttribute("radius", "0.05");
     enemyEntity.setAttribute("color", "lime");
-    enemyEntity.setAttribute("opacity", "0.5");
-    enemyEntity.setAttribute("metalness", "0.1");
-    enemyEntity.setAttribute("roughness", "0.5");
+    enemyEntity.setAttribute("roughness", "1");
 
     const spawnAngle = Math.random() * Math.PI * 2;
     const spawnX = Math.cos(spawnAngle) * this.SPAWN_DISTANCE;
@@ -158,7 +170,13 @@ class TowerDefenseGame {
   private updateEnemies() {
     const deltaTime = 1 / 60;
 
-    this.checkTowerAttacks();
+    if (this.isTowerVisible() && this.isBaseVisible()) {
+      this.checkTowerMovement();
+    }
+
+    if (!this.towerIsMoving) {
+      this.checkTowerAttacks();
+    }
 
     this.enemies.forEach((enemy, enemyId) => {
       const currentPos = enemy.entity.getAttribute("position");
@@ -197,14 +215,10 @@ class TowerDefenseGame {
   private destroyEnemy(enemyId: string) {
     const enemy = this.enemies.get(enemyId);
     if (enemy) {
-      console.log(`Destroying enemy ${enemyId}`);
       if (enemy.entity.parentNode) {
         enemy.entity.parentNode.removeChild(enemy.entity);
       }
       this.enemies.delete(enemyId);
-      console.log(
-        `Enemy ${enemyId} destroyed. Remaining enemies: ${this.enemies.size}`
-      );
     }
   }
 
@@ -252,11 +266,6 @@ class TowerDefenseGame {
         );
 
         if (distance <= this.TOWER_RANGE) {
-          console.log(
-            `Tower attacking enemy ${enemyId} at distance ${distance.toFixed(
-              3
-            )}`
-          );
           this.createAttackLine(enemy);
           enemiesToDestroy.push(enemyId);
         }
@@ -296,17 +305,8 @@ class TowerDefenseGame {
     const towerPos = this.getTowerPosition();
 
     if (!towerPos) {
-      console.log("Could not get tower position");
       return;
     }
-
-    console.log(
-      `Creating attack line from tower (${towerPos.x.toFixed(
-        3
-      )}, ${towerPos.y.toFixed(3)}) to enemy (${enemyPos.x.toFixed(
-        3
-      )}, ${enemyPos.y.toFixed(3)})`
-    );
 
     const lineEntity = document.createElement("a-entity");
 
@@ -335,20 +335,160 @@ class TowerDefenseGame {
 
     this.baseTarget.appendChild(lineEntity);
 
-    console.log(
-      `Attack line created in world space - distance: ${distance.toFixed(
-        3
-      )}, angle: ${angle.toFixed(3)}, midpoint: (${midpoint.x.toFixed(
-        3
-      )}, ${midpoint.y.toFixed(3)})`
-    );
-
     setTimeout(() => {
       if (lineEntity.parentNode) {
         lineEntity.parentNode.removeChild(lineEntity);
-        console.log("Attack line removed");
       }
     }, 100);
+  }
+
+  private setupTowerVisuals() {
+    if (!this.towerTarget) return;
+
+    // Store references to existing tower elements
+    this.towerSphere = this.towerTarget.querySelector("a-sphere");
+    this.towerCircle = this.towerTarget.querySelector("a-circle");
+
+    // Reset tower to active state
+    this.setTowerActive(true);
+  }
+
+  private handleTowerLost() {
+    // Remove any existing moving text before losing references
+    if (this.towerMovingText && this.towerTarget) {
+      try {
+        this.towerTarget.removeChild(this.towerMovingText);
+      } catch (e) {
+        console.log("Could not remove moving text (target already lost)");
+      }
+    }
+
+    // Set to moving state so it will need to re-establish stability when reconnected
+    this.towerIsMoving = true;
+    this.resetTowerState();
+  }
+
+  private resetTowerState() {
+    this.towerSphere = null;
+    this.towerCircle = null;
+    this.towerMovingText = null;
+    this.towerHomePosition = null;
+    this.lastTowerPosition = null;
+    this.lastMovementTime = Date.now(); // Set current time for stability checking
+  }
+
+  private checkTowerMovement() {
+    const currentPosition = this.getTowerPosition();
+    if (!currentPosition) {
+      return;
+    }
+
+    const currentTime = Date.now();
+
+    if (!this.towerHomePosition) {
+      // Establish initial home position
+      this.towerHomePosition = { ...currentPosition };
+      this.lastMovementTime = currentTime;
+      return;
+    }
+
+    // Check for movement from home position (triggers moving state)
+    const distanceFromHome = this.calculateDistance2D(
+      this.towerHomePosition,
+      currentPosition
+    );
+
+    // Check for recent movement (frame to frame)
+    let recentMovement = 0;
+    if (this.lastTowerPosition) {
+      recentMovement = this.calculateDistance2D(
+        this.lastTowerPosition,
+        currentPosition
+      );
+    }
+
+    if (distanceFromHome > this.MOVEMENT_THRESHOLD && !this.towerIsMoving) {
+      this.towerIsMoving = true;
+      this.setTowerActive(false);
+      this.lastMovementTime = 0;
+    }
+
+    if (this.towerIsMoving) {
+      if (recentMovement <= 0.1) {
+        if (this.lastMovementTime === 0) {
+          this.lastMovementTime = currentTime;
+        }
+
+        const timeSinceStabilizationStarted =
+          currentTime - this.lastMovementTime;
+        const timeRemaining =
+          this.STABILITY_TIME - timeSinceStabilizationStarted;
+
+        if (timeSinceStabilizationStarted >= this.STABILITY_TIME) {
+          this.towerHomePosition = { ...currentPosition };
+          this.towerIsMoving = false;
+          this.setTowerActive(true);
+          this.lastMovementTime = 0;
+        } else {
+          this.updateMovingText(Math.ceil(timeRemaining / 1000));
+        }
+      } else {
+        if (this.lastMovementTime > 0) {
+          this.lastMovementTime = 0;
+        }
+      }
+    }
+
+    this.lastTowerPosition = { ...currentPosition };
+  }
+
+  private updateMovingText(secondsRemaining: number) {
+    if (this.towerMovingText) {
+      if (secondsRemaining == this.STABILITY_TIME / 1000) {
+        this.towerMovingText.setAttribute("value", `BUILDING...`);
+      } else {
+        this.towerMovingText.setAttribute(
+          "value",
+          `BUILDING... (${secondsRemaining})`
+        );
+      }
+    }
+  }
+
+  private setTowerActive(active: boolean) {
+    if (!this.towerTarget) return;
+
+    if (active) {
+      // Activate tower
+      if (this.towerSphere) {
+        this.towerSphere.setAttribute("visible", "true");
+      }
+      if (this.towerCircle) {
+        this.towerCircle.setAttribute("color", "red");
+      }
+      if (this.towerMovingText) {
+        this.towerTarget.removeChild(this.towerMovingText);
+        this.towerMovingText = null;
+      }
+    } else {
+      // Deactivate tower
+      if (this.towerSphere) {
+        this.towerSphere.setAttribute("visible", "false");
+      }
+      if (this.towerCircle) {
+        this.towerCircle.setAttribute("color", "black");
+      }
+
+      if (!this.towerMovingText) {
+        this.towerMovingText = document.createElement("a-text");
+        this.towerMovingText.setAttribute("value", "BUILDING...");
+        this.towerMovingText.setAttribute("position", "0 0 0.15");
+        this.towerMovingText.setAttribute("align", "center");
+        this.towerMovingText.setAttribute("color", "white");
+        this.towerMovingText.setAttribute("scale", "0.5 0.5 0.5");
+        this.towerTarget.appendChild(this.towerMovingText);
+      }
+    }
   }
 
   private getTowerPosition(): Position2D | null {
@@ -360,7 +500,6 @@ class TowerDefenseGame {
     ) {
       return null;
     }
-
     // Get the tower's world position
     const towerWorldPos = this.towerTarget.object3D.getWorldPosition(
       new (window as any).THREE.Vector3()
@@ -375,12 +514,6 @@ class TowerDefenseGame {
       x: towerPos.x,
       y: towerPos.y,
     };
-
-    console.log(
-      `Tower local position in base coordinate system: (${relativePos.x.toFixed(
-        3
-      )}, ${relativePos.y.toFixed(3)})`
-    );
 
     return relativePos;
   }
