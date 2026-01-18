@@ -72,8 +72,10 @@ class TowerDefenseGame {
   private readonly MOVEMENT_THRESHOLD = 0.3;
   private readonly STABILITY_TIME = 2000;
   // Upgradeable tower properties
-  private towerFireRateMs: number = 3000;
-  private towerRange: number = 1000;
+  private readonly TOWER_BASE_RANGE = 1000;
+  private readonly TOWER_BASE_RADIUS = 1; // visual circle radius baseline
+  private towerFireRateMs: number = 2000;
+  private towerRange: number = this.TOWER_BASE_RANGE;
   // Multi-tower support
   private towers: TowerInstance[] = [];
 
@@ -134,19 +136,19 @@ class TowerDefenseGame {
         { value: 1.0, cost: 0 },
         { value: 1.2, cost: 8 },
         { value: 1.5, cost: 12 },
-        { value: 2, cost: 20 },
+        { value: 2.0, cost: 20 },
       ],
-      format: (v) => `${v.toFixed(1)}`,
+      format: (v) => `x${v.toFixed(1)}`,
     },
     {
       id: "fire-rate",
       name: "Tower Fire Rate",
       desc: "Reduce shooting cooldown",
       levels: [
-        { value: 1000, cost: 0 },
-        { value: 900, cost: 5 },
-        { value: 800, cost: 10 },
-        { value: 700, cost: 15 },
+        { value: 2000, cost: 0 },
+        { value: 1700, cost: 5 },
+        { value: 1200, cost: 10 },
+        { value: 900, cost: 15 },
         { value: 500, cost: 25 },
         { value: 300, cost: 40 },
       ],
@@ -158,8 +160,7 @@ class TowerDefenseGame {
       desc: "Increase base max health",
       levels: [
         { value: 100, cost: 0 },
-        { value: 120, cost: 10 },
-        { value: 150, cost: 12 },
+        { value: 150, cost: 10 },
         { value: 200, cost: 15 },
         { value: 300, cost: 20 },
       ],
@@ -173,6 +174,9 @@ class TowerDefenseGame {
   }
 
   private init() {
+    // Check if running on desktop and show popup
+    this.showDesktopPopupIfNeeded();
+
     document.addEventListener("DOMContentLoaded", () => {
       this.scene = document.querySelector("a-scene");
 
@@ -216,9 +220,37 @@ class TowerDefenseGame {
         });
       }
 
+      // Add help button listener
+      const helpBtn = document.getElementById("help-btn");
+      const helpPopup = document.getElementById("help-popup");
+      const closeHelpBtn = document.getElementById("close-help");
+      const helpBlur = document.getElementById("help-blur");
+
+      if (helpBtn && helpPopup) {
+        helpBtn.addEventListener("click", () => {
+          helpPopup.style.display = "flex";
+          if (helpBlur) helpBlur.style.display = "block";
+        });
+      }
+
+      if (closeHelpBtn && helpPopup) {
+        closeHelpBtn.addEventListener("click", () => {
+          helpPopup.style.display = "none";
+          if (helpBlur) helpBlur.style.display = "none";
+        });
+      }
+
+      if (helpBlur && helpPopup) {
+        helpBlur.addEventListener("click", () => {
+          helpPopup.style.display = "none";
+          helpBlur.style.display = "none";
+        });
+      }
+
       // Load persisted upgrade state
       this.loadUpgradeState();
       this.loadPoints();
+      this.applyUpgradeEffects();
 
       if (this.scene.hasLoaded) {
         this.setupGame();
@@ -228,6 +260,40 @@ class TowerDefenseGame {
         });
       }
     });
+  }
+
+  private showDesktopPopupIfNeeded() {
+    // Detect if device is mobile or desktop
+    const isMobile =
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
+
+    const popup = document.getElementById("desktop-popup");
+    const closeBtn = document.getElementById("close-popup");
+    const popupBlur = popup?.querySelector("#blur") as HTMLElement | null;
+
+    if (!isMobile && popup) {
+      // Show popup on desktop
+      popup.style.display = "flex";
+      if (popupBlur) popupBlur.style.display = "block";
+
+      // Close button handler
+      if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+          popup.style.display = "none";
+          if (popupBlur) popupBlur.style.display = "none";
+        });
+      }
+
+      // Close when clicking on blur
+      if (popupBlur) {
+        popupBlur.addEventListener("click", () => {
+          popup.style.display = "none";
+          popupBlur.style.display = "none";
+        });
+      }
+    }
   }
 
   private setupGame() {
@@ -242,6 +308,9 @@ class TowerDefenseGame {
       console.error("Could not find base or tower targets");
       return;
     }
+
+    // Apply upgrades to runtime stats before initializing towers
+    this.applyUpgradeEffects();
 
     // Initialize towers based on upgrade level
     this.initializeTowersFromUpgrades();
@@ -362,6 +431,9 @@ class TowerDefenseGame {
         tower.movingText = null;
       }
     });
+
+    // Recompute upgraded stats before reinitializing
+    this.applyUpgradeEffects();
 
     // Re-initialize towers based on new upgrade level
     this.initializeTowersFromUpgrades();
@@ -852,6 +924,13 @@ class TowerDefenseGame {
 
     // Reset tower to active state
     this.setTowerActiveForTower(tower, true);
+
+    // Scale range circle based on current range factor
+    const rangeFactor = this.towerRange / this.TOWER_BASE_RANGE;
+    const radius = this.TOWER_BASE_RADIUS * rangeFactor;
+    if (tower.circle) {
+      tower.circle.setAttribute("radius", radius);
+    }
   }
 
   private handleTowerLostForTower(tower: TowerInstance) {
@@ -1077,6 +1156,10 @@ class TowerDefenseGame {
     if (this.pointsElement) {
       this.pointsElement.textContent = this.points.toString();
     }
+    // Also update upgrade screen points in real-time
+    if (this.upgradePointsElement) {
+      this.upgradePointsElement.textContent = this.points.toString();
+    }
   }
 
   private updateWaveDisplay() {
@@ -1253,6 +1336,35 @@ class TowerDefenseGame {
     } catch {}
   }
 
+  private getUpgradeCurrentValueById(id: UpgradeId): number {
+    const def = this.upgradeDefs.find((d) => d.id === id);
+    if (!def) return 0;
+    return this.getUpgradeCurrentValue(def);
+  }
+
+  private applyUpgradeEffects() {
+    // Pull current values from upgrade state
+    const rangeFactor = this.getUpgradeCurrentValueById("range");
+    this.towerRange = this.TOWER_BASE_RANGE * rangeFactor;
+    this.towerFireRateMs = this.getUpgradeCurrentValueById("fire-rate");
+    this.defaultBaseHealth = this.getUpgradeCurrentValueById("base-health");
+
+    // Sync existing towers to latest stats
+    this.towers.forEach((tower) => {
+      tower.range = this.towerRange;
+      tower.fireRateMs = this.towerFireRateMs;
+      // Update visual range circle scaling
+      const radius = this.TOWER_BASE_RADIUS * rangeFactor;
+      if (tower.circle) {
+        tower.circle.setAttribute("radius", radius);
+      }
+    });
+
+    // Keep health at max when max health increases
+    this.health = this.defaultBaseHealth;
+    this.updateHealthDisplay();
+  }
+
   private getUpgradeCurrentValue(def: UpgradeDefinition<number>): number {
     const lvl = this.upgradeState[def.id] ?? 0;
     return def.levels[Math.min(lvl, def.levels.length - 1)].value;
@@ -1282,16 +1394,30 @@ class TowerDefenseGame {
 
       const currentLevel = this.upgradeState[def.id] ?? 0;
       const maxLevelReached = currentLevel >= def.levels.length - 1;
+      const totalLevels = def.levels.length;
+      const nextDisplay = maxLevelReached ? "Max" : def.format(nextVal);
+      const costDisplay = maxLevelReached
+        ? "Max"
+        : `<span class=\"material-symbols-rounded icon-bolt-small\">bolt</span><span class=\"cost-value\">${nextCost}</span>`;
+
+      // Build progress bar with segments
+      let progressBarHTML = '<div class=\"upgrade-progress\">';
+      for (let i = 0; i < totalLevels; i++) {
+        const filled = i <= currentLevel ? "filled" : "";
+        progressBarHTML += `<div class=\"progress-segment ${filled}\"></div>`;
+      }
+      progressBarHTML += "</div>";
 
       const item = document.createElement("div");
       item.className = "upgrade-item";
       item.innerHTML = `
         <div class=\"upgrade-header\">
           <span class=\"upgrade-name\">${def.name}</span>
-          <span class=\"upgrade-cost\"><span class=\"material-symbols-rounded icon-bolt-small\">bolt</span><span class=\"cost-value\">${nextCost}</span></span>
+          <span class=\"upgrade-cost\">${costDisplay}</span>
         </div>
         <p class=\"upgrade-desc\">${def.desc}</p>
-        <p class=\"upgrade-level\"><span class=\"level-current\">${def.format(currentVal)}</span> → <span class=\"level-next\">${def.format(nextVal)}</span></p>
+        <p class=\"upgrade-level\"><span class=\"level-current\">${def.format(currentVal)}</span> <span class=\"material-symbols-rounded icon-to\">arrow_right</span> <span class=\"level-next\">${nextDisplay}</span></p>
+        ${progressBarHTML}
         <button class=\"upgrade-btn\" data-upgrade=\"${def.id}\">Upgrade</button>
       `;
 
@@ -1301,7 +1427,7 @@ class TowerDefenseGame {
         let btnText = "Upgrade";
         let disabled = false;
         if (maxLevelReached) {
-          btnText = "Max level reached";
+          btnText = "Max";
           disabled = true;
         } else if (this.points < nextCost) {
           btnText = "Not enough points";
@@ -1338,6 +1464,9 @@ class TowerDefenseGame {
     // Increment upgrade level
     this.upgradeState[upgradeId] = (this.upgradeState[upgradeId] ?? 0) + 1;
     this.saveUpgradeState();
+
+    // Apply new upgrade effects to stats/towers
+    this.applyUpgradeEffects();
 
     // Re-render UI to show updated state
     this.renderUpgradeUI();
