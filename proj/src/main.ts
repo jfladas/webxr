@@ -28,6 +28,7 @@ class TowerDefenseGame {
   // UI elements
   private healthElement: HTMLElement | null = null;
   private pointsElement: HTMLElement | null = null;
+  private waveElement: HTMLElement | null = null;
   private gameOverScreen: HTMLElement | null = null;
   private finalScoreElement: HTMLElement | null = null;
   private restartButton: HTMLElement | null = null;
@@ -41,7 +42,7 @@ class TowerDefenseGame {
   private towerIsMoving = false;
   private lastMovementTime = 0;
   private readonly MOVEMENT_THRESHOLD = 0.3;
-  private readonly STABILITY_TIME = 4000;
+  private readonly STABILITY_TIME = 2000;
   private lastShotTime: number = 0;
   // Upgradeable tower properties
   private towerFireRateMs: number = 3000;
@@ -52,24 +53,34 @@ class TowerDefenseGame {
   private pointMultiplier: number = 1;
 
   private readonly SPAWN_DISTANCE = 5;
-  private readonly SPAWN_TIME = 3000;
-  private readonly MIN_SPAWN_TIME = 100; // fastest spawn interval
-  private readonly SPAWN_RATE_DECREASE_TIME = 180; // seconds to reach min spawn time
+  private readonly MIN_SPAWN_TIME = 10; // fastest spawn interval
   private readonly GAME_Z_PLANE = 0;
 
-  // Progressive difficulty / spawn dispersion
-  private spawnStartTime: number | null = null;
+  // Spawn properties
   private spawnCount = 0;
   private spawnCenterAngle = 0;
-  private readonly INITIAL_SPAWN_SPREAD = Math.PI / 6;
-  private readonly SPAWN_SPREAD_GROWTH_TIME = 120;
-  private readonly MAX_SPAWN_SPREAD = Math.PI * 2;
-  private readonly INITIAL_ENEMY_SPEED = 0.3;
-  private readonly MAX_ENEMY_SPEED = 1.5;
-  private readonly ENEMY_SPEED_GROWTH_TIME = 180;
 
-  // current spawn interval tracking so we can adjust spawn rate over time
-  private currentSpawnIntervalMs: number | null = null;
+  // Wave system
+  private currentWave = 0;
+  private totalWaves = 10;
+  private waveActive = false;
+  private wavePaused = false; // track if wave is paused due to target loss
+  private enemiesSpawnedInWave = 0;
+  private waveBreakDuration = 3000; // 3 second break between waves
+  private pausedWaveConfig: any = null; // store config during pause
+  private pausedWaveCompleted = false; // track if we've completed spawning during pause
+  private waveConfig = [
+    { count: 5, baseSpeed: 0.3, spreadAngle: 10 },
+    { count: 7, baseSpeed: 0.4, spreadAngle: 30 },
+    { count: 10, baseSpeed: 0.5, spreadAngle: 60 },
+    { count: 15, baseSpeed: 0.65, spreadAngle: 90 },
+    { count: 20, baseSpeed: 0.8, spreadAngle: 120 },
+    { count: 25, baseSpeed: 1, spreadAngle: 180 },
+    { count: 40, baseSpeed: 1.2, spreadAngle: 240 },
+    { count: 50, baseSpeed: 1.5, spreadAngle: 300 },
+    { count: 70, baseSpeed: 2, spreadAngle: 330 },
+    { count: 100, baseSpeed: 3, spreadAngle: 360 },
+  ];
 
   constructor() {
     this.init();
@@ -82,6 +93,7 @@ class TowerDefenseGame {
       // Initialize UI elements
       this.healthElement = document.getElementById("health-value");
       this.pointsElement = document.getElementById("points-value");
+      this.waveElement = document.getElementById("wave-value");
       this.gameOverScreen = document.getElementById("game-over-screen");
       this.finalScoreElement = document.getElementById("final-score");
       this.restartButton = document.getElementById("restart-btn");
@@ -144,47 +156,161 @@ class TowerDefenseGame {
   }
 
   private startEnemySpawning() {
-    if (this.spawnInterval) return;
+    if (this.wavePaused && this.currentWave > 0) {
+      // Resume a paused wave
+      this.wavePaused = false;
+      this.waveActive = true;
+      this.resumeWave();
+    } else if (this.currentWave === 0) {
+      // Start a new game
+      this.currentWave = 1;
+      this.startWave();
+    }
+  }
 
-    // initialize spawn progression only if it hasn't been started yet
-    if (!this.spawnStartTime) {
-      this.spawnStartTime = Date.now();
-      this.spawnCount = 0;
-      this.spawnCenterAngle = Math.random() * Math.PI * 2; // pick an initial incoming direction
+  private resumeWave() {
+    if (!this.pausedWaveConfig || this.currentWave === 0) return;
+
+    const waveConfig = this.pausedWaveConfig;
+    const spawnInterval = Math.max(
+      this.MIN_SPAWN_TIME,
+      Math.round(8000 / waveConfig.count)
+    );
+
+    const waveCompleted = this.pausedWaveCompleted;
+
+    this.spawnInterval = window.setInterval(() => {
+      if (!this.waveActive || waveCompleted) {
+        return;
+      }
+
+      if (this.enemiesSpawnedInWave < waveConfig.count) {
+        this.spawnEnemy();
+      } else {
+        // Wave complete, clear interval and prepare for next wave
+        clearInterval(this.spawnInterval!);
+        this.spawnInterval = null;
+        this.waveActive = false;
+        this.pausedWaveConfig = null;
+        console.log(
+          `Wave ${this.currentWave} complete (${waveConfig.count} enemies spawned). Break for ${this.waveBreakDuration}ms...`
+        );
+
+        if (this.currentWave < this.totalWaves) {
+          setTimeout(() => {
+            this.currentWave++;
+            this.startWave();
+          }, this.waveBreakDuration);
+        } else {
+          console.log("All waves completed!");
+        }
+      }
+    }, spawnInterval);
+
+    console.log(
+      `Wave ${this.currentWave} resumed (${this.enemiesSpawnedInWave}/${waveConfig.count} spawned)`
+    );
+  }
+
+  private startWave() {
+    if (this.currentWave > this.totalWaves || this.gameOver) {
+      return;
     }
 
-    // compute initial spawn interval based on progression
-    const elapsed = this.spawnStartTime
-      ? (Date.now() - this.spawnStartTime) / 1000
-      : 0;
-    const initialMs = Math.max(
-      this.MIN_SPAWN_TIME,
-      Math.round(this.computeSpawnIntervalMs(elapsed))
+    const waveConfig = this.waveConfig[this.currentWave - 1];
+    this.waveActive = true;
+    this.enemiesSpawnedInWave = 0;
+    this.wavePaused = false;
+    this.pausedWaveCompleted = false;
+    this.pausedWaveConfig = waveConfig; // Save for potential pause/resume
+    this.spawnCenterAngle = Math.random() * Math.PI * 2; // pick a new direction for this wave
+
+    console.log(
+      `Wave ${this.currentWave} started: ${waveConfig.count} enemies`
     );
-    this.currentSpawnIntervalMs = initialMs;
+
+    if (this.spawnInterval) {
+      clearInterval(this.spawnInterval);
+    }
+
+    // Calculate spawn interval for this wave - spread spawns over ~8 seconds instead of 3
+    const spawnIntervalMs = Math.max(
+      this.MIN_SPAWN_TIME,
+      Math.round(8000 / waveConfig.count) // spread spawns evenly across ~8 seconds
+    );
+
+    // Delay wave display update to let first enemies appear in frame
+    setTimeout(() => {
+      this.updateWaveDisplay();
+    }, 2000 / waveConfig.baseSpeed);
+
+    let waveCompleted = false;
+
     this.spawnInterval = window.setInterval(() => {
-      this.spawnEnemy();
-    }, initialMs);
+      // If wave was paused, stop the interval and let resumeWave take over
+      if (this.wavePaused) {
+        clearInterval(this.spawnInterval!);
+        this.spawnInterval = null;
+        this.pausedWaveCompleted = waveCompleted;
+        return;
+      }
+
+      if (!this.waveActive || waveCompleted) {
+        return;
+      }
+
+      if (this.enemiesSpawnedInWave < waveConfig.count) {
+        this.spawnEnemy();
+      } else if (!waveCompleted) {
+        // Wave complete, mark it and start break before next wave
+        waveCompleted = true;
+        clearInterval(this.spawnInterval!);
+        this.spawnInterval = null;
+        this.waveActive = false;
+        this.pausedWaveConfig = null;
+        console.log(
+          `Wave ${this.currentWave} complete (${waveConfig.count} enemies spawned). Break for ${this.waveBreakDuration}ms...`
+        );
+
+        if (this.currentWave < this.totalWaves) {
+          setTimeout(() => {
+            this.currentWave++;
+            this.startWave();
+          }, this.waveBreakDuration);
+        } else {
+          console.log("All waves completed!");
+        }
+      }
+    }, spawnIntervalMs);
   }
 
   private stopEnemySpawning(resetProgress: boolean = true) {
     if (this.spawnInterval) {
       clearInterval(this.spawnInterval);
       this.spawnInterval = null;
-      // clear current interval tracking
-      this.currentSpawnIntervalMs = null;
+    }
 
-      if (resetProgress) {
-        // reset progression so next game/session starts fresh
-        this.spawnStartTime = null;
-        this.spawnCount = 0;
-      }
-      console.log("Enemy spawning stopped");
+    if (resetProgress) {
+      // reset progression so next game/session starts fresh
+      this.spawnCount = 0;
+      this.currentWave = 0;
+      this.waveActive = false;
+      this.wavePaused = false;
+      this.enemiesSpawnedInWave = 0;
+      this.pausedWaveConfig = null;
+      console.log("Enemy spawning stopped and reset");
+    } else {
+      // pause the current wave without resetting progress
+      this.waveActive = false;
+      this.wavePaused = true;
+      console.log(
+        `Wave ${this.currentWave} paused (${this.enemiesSpawnedInWave} enemies spawned so far)`
+      );
     }
   }
 
   private spawnEnemy() {
-    if (this.gameOver) {
+    if (this.gameOver || !this.waveActive || this.wavePaused) {
       return;
     }
 
@@ -200,12 +326,9 @@ class TowerDefenseGame {
     enemyEntity.setAttribute("color", "lime");
     enemyEntity.setAttribute("roughness", "1");
 
-    // compute progressive spread and speed based on elapsed time since spawning started
-    const elapsed = this.spawnStartTime
-      ? (Date.now() - this.spawnStartTime) / 1000
-      : 0;
-    const spread = this.computeSpawnSpread(elapsed);
-    const angle = this.computeSpawnAngle(spread);
+    const waveConfig = this.waveConfig[this.currentWave - 1];
+    const spreadRadians = (waveConfig.spreadAngle * Math.PI) / 180; // Convert degrees to radians
+    const angle = this.computeSpawnAngle(spreadRadians);
     const spawnX = Math.cos(angle) * this.SPAWN_DISTANCE;
     const spawnY = Math.sin(angle) * this.SPAWN_DISTANCE;
 
@@ -216,7 +339,7 @@ class TowerDefenseGame {
 
     this.baseTarget.appendChild(enemyEntity);
 
-    const enemySpeed = this.computeEnemySpeed(elapsed);
+    const enemySpeed = waveConfig.baseSpeed;
 
     const enemy: Enemy = {
       id: enemyId,
@@ -228,25 +351,14 @@ class TowerDefenseGame {
 
     this.enemies.set(enemyId, enemy);
     this.spawnCount++;
-
-    // After spawning, update spawn interval progressively (so spawn rate increases over time)
-    this.updateSpawnInterval(elapsed);
+    this.enemiesSpawnedInWave++;
 
     console.log(
       `Spawned enemy ${enemyId} at position (${spawnX.toFixed(
         2
-      )}, ${spawnY.toFixed(2)}, 0) speed=${enemySpeed.toFixed(
-        2
-      )} spread=${spread.toFixed(2)}`
-    );
-  }
-
-  private computeSpawnSpread(elapsedSeconds: number) {
-    // linear growth from initial spread to full circle over SPAWN_SPREAD_GROWTH_TIME
-    const t = Math.min(1, elapsedSeconds / this.SPAWN_SPREAD_GROWTH_TIME);
-    return (
-      this.INITIAL_SPAWN_SPREAD +
-      t * (this.MAX_SPAWN_SPREAD - this.INITIAL_SPAWN_SPREAD)
+      )}, ${spawnY.toFixed(2)}, 0) speed=${enemySpeed.toFixed(2)} spreadAngle=${
+        waveConfig.spreadAngle
+      }°`
     );
   }
 
@@ -259,44 +371,6 @@ class TowerDefenseGame {
     // choose angle around center with uniform distribution in [center - spread/2, center + spread/2]
     const offset = (Math.random() - 0.5) * spread;
     return this.spawnCenterAngle + offset;
-  }
-
-  private computeEnemySpeed(elapsedSeconds: number) {
-    // linear growth from INITIAL_ENEMY_SPEED to MAX_ENEMY_SPEED over ENEMY_SPEED_GROWTH_TIME
-    const t = Math.min(1, elapsedSeconds / this.ENEMY_SPEED_GROWTH_TIME);
-    return (
-      this.INITIAL_ENEMY_SPEED +
-      t * (this.MAX_ENEMY_SPEED - this.INITIAL_ENEMY_SPEED)
-    );
-  }
-
-  private computeSpawnIntervalMs(elapsedSeconds: number) {
-    // linear interpolation from initial SPAWN_TIME to MIN_SPAWN_TIME over SPAWN_RATE_DECREASE_TIME
-    const t = Math.min(1, elapsedSeconds / this.SPAWN_RATE_DECREASE_TIME);
-    const initial = this.SPAWN_TIME;
-    const min = this.MIN_SPAWN_TIME;
-    return initial - t * (initial - min);
-  }
-
-  private updateSpawnInterval(elapsedSeconds: number) {
-    if (!this.spawnInterval) return;
-    const newInterval = Math.max(
-      this.MIN_SPAWN_TIME,
-      Math.round(this.computeSpawnIntervalMs(elapsedSeconds))
-    );
-    if (
-      this.currentSpawnIntervalMs === null ||
-      newInterval !== this.currentSpawnIntervalMs
-    ) {
-      // restart the interval with the new timing
-      clearInterval(this.spawnInterval);
-      this.spawnInterval = window.setInterval(() => {
-        this.spawnEnemy();
-      }, newInterval);
-      this.currentSpawnIntervalMs = newInterval;
-      // small debug log
-      console.log(`Adjusted spawn interval to ${newInterval}ms`);
-    }
   }
 
   private updateTowerCooldownIndicator() {
@@ -638,7 +712,9 @@ class TowerDefenseGame {
           this.setTowerActive(true);
           this.lastMovementTime = 0;
         } else {
-          this.updateMovingText(Math.ceil(timeRemaining / 1000));
+          this.updateMovingText(
+            Math.ceil(100 - (timeRemaining / this.STABILITY_TIME) * 100) + "%"
+          );
         }
       } else {
         if (this.lastMovementTime > 0) {
@@ -650,16 +726,12 @@ class TowerDefenseGame {
     this.lastTowerPosition = { ...currentPosition };
   }
 
-  private updateMovingText(secondsRemaining: number) {
+  private updateMovingText(percentageRemaining: string) {
     if (this.towerMovingText) {
-      if (secondsRemaining == this.STABILITY_TIME / 1000) {
-        this.towerMovingText.setAttribute("value", `BUILDING...`);
-      } else {
-        this.towerMovingText.setAttribute(
-          "value",
-          `BUILDING... (${secondsRemaining})`
-        );
-      }
+      this.towerMovingText.setAttribute(
+        "value",
+        `BUILDING... (${percentageRemaining})`
+      );
     }
   }
 
@@ -763,6 +835,12 @@ class TowerDefenseGame {
     }
   }
 
+  private updateWaveDisplay() {
+    if (this.waveElement) {
+      this.waveElement.textContent = this.currentWave.toString();
+    }
+  }
+
   private endGame() {
     this.gameOver = true;
 
@@ -792,8 +870,15 @@ class TowerDefenseGame {
       this.destroyEnemy(enemyId);
     });
 
-    // Reset enemy counter
+    // Reset enemy counter and wave system
     this.enemyIdCounter = 0;
+    this.currentWave = 0;
+    this.waveActive = false;
+    this.wavePaused = false;
+    this.enemiesSpawnedInWave = 0;
+    this.spawnCount = 0;
+    this.pausedWaveConfig = null;
+    this.pausedWaveCompleted = false;
 
     // Update UI
     this.updateHealthDisplay();
