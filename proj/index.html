@@ -4,7 +4,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TD</title>
+  <title>AR Tower Defense</title>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
   <link rel="stylesheet" href="styles.css" />
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
@@ -13,14 +15,24 @@
 <body>
   <div id="game-overlay">
     <div id="game-stats">
-      <div id="health-display">Health: <span id="health-value">100</span></div>
-      <div id="points-display">Points: <span id="points-value">0</span></div>
-      <div id="wave-display">Wave: <span id="wave-value">0</span>/10</div>
+      <div id="wave-display">Wave <span id="wave-value">0</span>/10</div>
+      <div id="health-display"><span class="material-symbols-rounded icon-heart">favorite</span><span
+          id="health-value">100</span></div>
+      <div id="points-display"><span class="material-symbols-rounded icon-bolt">bolt</span><span
+          id="points-value">0</span></div>
+
     </div>
-    <div id="game-over-screen" style="display: none;">
-      <h2>Game Over!</h2>
-      <p>Final Score: <span id="final-score">0</span></p>
-      <button id="restart-btn">Restart Game</button>
+    <div id="blur"></div>
+    <div id="upgrade-screen" style="display: none;">
+      <h2>Defeat!</h2>
+      <div id="upgrade-stats">
+        <p><span class="material-symbols-rounded icon-bolt">bolt</span><span id="upgrade-points">0</span></p>
+      </div>
+      <div id="upgrade-list"></div>
+      <div id="button-group">
+        <button id="reset-upgrades-btn" style="background-color: #666; font-size: 0.8em;">Reset Upgrades</button>
+        <button id="restart-btn">Restart</button>
+      </div>
     </div>
   </div>
   <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 4; filterMinCF:0.00001; filterBeta: 0.01"
@@ -37,22 +49,22 @@
         animation="property: rotation; to: 0 0 360; loop: true; dur: 10000; elasticity: 0; easing: linear"></a-icosahedron>
     </a-entity>
 
-    <!-- Tower (Target 1) - Red Sphere with Range Circle -->
-    <a-entity mindar-image-target="targetIndex: 1" scale="1 1 1">
-      <a-circle position="0 0 0.01" radius="1" color="red" opacity="0.1"></a-circle>
-      <a-sphere position="0 0 0.1" radius="0.25" color="red" roughness="1"></a-sphere>
+    <!-- Tower (Target 1) - Purple Sphere with Range Circle -->
+    <a-entity class="tower" mindar-image-target="targetIndex: 1" scale="1 1 1">
+      <a-circle position="0 0 0.01" radius="1" color="#6600FF" opacity="0.1"></a-circle>
+      <a-sphere position="0 0 0.1" radius="0.25" color="#6600FF" roughness="1"></a-sphere>
     </a-entity>
 
-    <!-- Second Tower (Target 2) - Red Cube with Range Circle -->
-    <a-entity mindar-image-target="targetIndex: 2" scale="1 1 1">
-      <a-circle position="0 0 0.01" radius="1" color="red" opacity="0.1"></a-circle>
-      <a-box position="0 0 0.1" width="0.4" height="0.4" depth="0.4" color="red" roughness="1"></a-box>
+    <!-- Second Tower (Target 2) - Purple Cube with Range Circle -->
+    <a-entity class="tower" mindar-image-target="targetIndex: 2" scale="1 1 1" visible="false">
+      <a-circle position="0 0 0.01" radius="1" color="#6600FF" opacity="0.1"></a-circle>
+      <a-box position="0 0 0.1" width="0.4" height="0.4" depth="0.4" color="#6600FF" roughness="1"></a-box>
     </a-entity>
 
-    <!-- Third Tower (Target 3) - Red Pyramid with Range Circle -->
-    <a-entity mindar-image-target="targetIndex: 3" scale="1 1 1">
-      <a-circle position="0 0 0.01" radius="1" color="red" opacity="0.1"></a-circle>
-      <a-tetrahedron position="0 0 0.1" scale="0.5 0.5 0.5" color="red" roughness="1"></a-tetrahedron>
+    <!-- Third Tower (Target 3) - Purple Pyramid with Range Circle -->
+    <a-entity class="tower" mindar-image-target="targetIndex: 3" scale="1 1 1" visible="false">
+      <a-circle position="0 0 0.01" radius="1" color="#6600FF" opacity="0.1"></a-circle>
+      <a-tetrahedron position="0 0 0.1" scale="0.5 0.5 0.5" color="#6600FF" roughness="1"></a-tetrahedron>
     </a-entity>
 
     <!-- Optional additional targets can be added here -->

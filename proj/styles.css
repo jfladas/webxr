@@ -1,3 +1,21 @@
+@font-face {
+    font-family: 'Avenir Next';
+    src: url('Avenir Next LT Pro Regular.otf') format('opentype');
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Avenir Next';
+    src: url('Avenir Next LT Pro Demi.otf') format('opentype');
+    font-weight: 600;
+    font-style: normal;
+}
+
+* {
+    font-family: 'Avenir Next', sans-serif;
+}
+
 #game-overlay {
     position: fixed;
     top: 0;
@@ -12,11 +30,11 @@
     position: absolute;
     top: 20px;
     left: 20px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
     color: white;
     padding: 15px;
     border-radius: 10px;
-    font-family: Arial, sans-serif;
     font-size: 18px;
     pointer-events: auto;
 }
@@ -29,52 +47,229 @@
     margin-bottom: 0;
 }
 
+#wave-value {
+    color: #FFFFFF;
+    font-weight: 600;
+}
+
 #health-value {
-    color: #4CAF50;
-    font-weight: bold;
+    color: #FFFFFF;
+    font-weight: 600;
 }
 
 #health-value.low {
-    color: #f44336;
+    color: #F8349B;
+}
+
+.material-symbols-rounded {
+    font-variation-settings:
+        'FILL' 1,
+        'wght' 600,
+        'GRAD' 0,
+        'opsz' 24;
+}
+
+.icon-bolt {
+    color: #47DCFF;
+    font-size: 20px;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.icon-heart {
+    color: #F8349B;
+    font-size: 20px;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.icon-bolt-small {
+    color: #47DCFF;
+    font-size: 12px;
+    vertical-align: middle;
+    margin-right: 3px;
+}
+
+.icon-to {
+    font-size: 16px;
+    vertical-align: middle;
+    margin-bottom: 4px;
+}
+
+#health-display {
+    display: flex;
+    align-items: center;
+}
+
+#points-display {
+    display: flex;
+    align-items: center;
 }
 
 #points-value {
-    color: #2196F3;
-    font-weight: bold;
+    color: #FFFFFF;
+    font-weight: 600;
 }
 
-#game-over-screen {
+#blur {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+    display: none;
+}
+
+#upgrade-screen {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.7);
     color: white;
     padding: 30px;
-    border-radius: 15px;
-    text-align: center;
-    font-family: Arial, sans-serif;
+    border-radius: 10px;
     pointer-events: auto;
+    max-height: 90vh;
+    min-width: 80vw;
+    overflow-y: auto;
 }
 
-#game-over-screen h2 {
-    color: #f44336;
+#upgrade-screen h2 {
+    color: #FFFFFF;
     margin-top: 0;
+    text-align: center;
+    font-size: 28px;
+    font-weight: 600;
+}
+
+#upgrade-stats {
+    text-align: center;
+    margin: 15px 0;
+    padding: 10px;
+    background: rgba(71, 220, 255, 0.1);
+    border-radius: 8px;
+}
+
+#upgrade-stats p {
+    margin: 5px 0;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#upgrade-points {
+    color: #47DCFF;
+    font-weight: 600;
+    font-weight: bold;
+}
+
+#upgrade-list {
+    margin: 20px 0;
+    margin-bottom: 100px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.upgrade-item {
+    background: rgba(102, 0, 255, 0.15);
+    border-radius: 8px;
+    padding: 12px;
+    color: white;
+}
+
+.upgrade-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.upgrade-name {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.upgrade-cost {
+    color: #47DCFF;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+}
+
+.upgrade-desc {
+    color: #aaaaaa;
+    font-size: 13px;
+    margin: 5px 0 3px 0;
+}
+
+.upgrade-level {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 3px 0 8px 0;
+}
+
+.level-current {
+    color: #aaaaaa;
+}
+
+.level-next {
+    color: #FFFFFF;
+}
+
+.upgrade-btn {
+    background: #6600FF;
+    color: #FFFFFF;
+    border: none;
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+.upgrade-btn:active {
+    transform: scale(0.95);
+}
+
+.upgrade-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+}
+
+#button-group {
+    padding: 10px 0px;
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+    overflow: visible;
 }
 
 #restart-btn {
-    background: #4CAF50;
-    color: white;
+    background: #CCFF33;
+    color: #000000;
+    box-shadow: rgba(0, 0, 0, 0.7) 0px 0px 50px 100px;
     border: none;
-    padding: 10px 20px;
+    padding: 12px;
     font-size: 16px;
     border-radius: 5px;
+    width: 100%;
     cursor: pointer;
-    margin-top: 15px;
+    font-weight: 600;
+    transition: all 0.2s ease;
 }
 
-#restart-btn:hover {
-    background: #45a049;
+#restart-btn:active {
+    transform: scale(0.95);
 }
 
 /* Hide VR mode button */

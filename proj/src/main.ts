@@ -25,6 +25,25 @@ interface TowerInstance {
   range: number;
 }
 
+type UpgradeId = "tower-count" | "range" | "base-health" | "fire-rate";
+
+interface UpgradeLevel<T = number> {
+  value: T;
+  cost: number; // cost to reach this level from previous level
+}
+
+interface UpgradeDefinition<T = number> {
+  id: UpgradeId;
+  name: string;
+  desc: string;
+  levels: UpgradeLevel<T>[]; // levels[0] is starting level
+  format: (v: T) => string;
+}
+
+interface UpgradeState {
+  [key: string]: number; // level per upgrade id
+}
+
 class TowerDefenseGame {
   private scene: any;
   private baseTarget: any;
@@ -43,9 +62,11 @@ class TowerDefenseGame {
   private healthElement: HTMLElement | null = null;
   private pointsElement: HTMLElement | null = null;
   private waveElement: HTMLElement | null = null;
-  private gameOverScreen: HTMLElement | null = null;
-  private finalScoreElement: HTMLElement | null = null;
+  private upgradeScreen: HTMLElement | null = null;
+  private blurElement: HTMLElement | null = null;
+  private upgradePointsElement: HTMLElement | null = null;
   private restartButton: HTMLElement | null = null;
+  private upgradeListElement: HTMLElement | null = null;
 
   // Tower state tracking (per-tower handled via towers[])
   private readonly MOVEMENT_THRESHOLD = 0.3;
@@ -78,17 +99,74 @@ class TowerDefenseGame {
   private pausedWaveConfig: any = null; // store config during pause
   private pausedWaveCompleted = false; // track if we've completed spawning during pause
   private waveConfig = [
-    { count: 5, baseSpeed: 0.3, spreadAngle: 10 },
-    { count: 7, baseSpeed: 0.4, spreadAngle: 30 },
-    { count: 10, baseSpeed: 0.5, spreadAngle: 60 },
-    { count: 15, baseSpeed: 0.65, spreadAngle: 90 },
-    { count: 20, baseSpeed: 0.8, spreadAngle: 120 },
-    { count: 25, baseSpeed: 1, spreadAngle: 180 },
-    { count: 40, baseSpeed: 1.2, spreadAngle: 240 },
-    { count: 50, baseSpeed: 1.5, spreadAngle: 300 },
-    { count: 70, baseSpeed: 2, spreadAngle: 330 },
-    { count: 100, baseSpeed: 3, spreadAngle: 360 },
+    { count: 5, baseSpeed: 0.3, spreadAngle: 10, duration: 5000 },
+    { count: 7, baseSpeed: 0.4, spreadAngle: 30, duration: 8000 },
+    { count: 10, baseSpeed: 0.5, spreadAngle: 60, duration: 8000 },
+    { count: 15, baseSpeed: 0.65, spreadAngle: 90, duration: 8000 },
+    { count: 20, baseSpeed: 0.8, spreadAngle: 120, duration: 8000 },
+    { count: 25, baseSpeed: 1, spreadAngle: 180, duration: 9000 },
+    { count: 40, baseSpeed: 1.2, spreadAngle: 240, duration: 10000 },
+    { count: 50, baseSpeed: 1.5, spreadAngle: 300, duration: 10000 },
+    { count: 70, baseSpeed: 2, spreadAngle: 330, duration: 12000 },
+    { count: 100, baseSpeed: 3, spreadAngle: 360, duration: 15000 },
   ];
+
+  // Upgrades configuration and state
+  private readonly UPGRADE_STORAGE_KEY = "td_upgrades";
+  private readonly POINTS_STORAGE_KEY = "td_points";
+  private upgradeDefs: UpgradeDefinition<number>[] = [
+    {
+      id: "tower-count",
+      name: "Tower Count",
+      desc: "Add an additional tower",
+      levels: [
+        { value: 1, cost: 0 },
+        { value: 2, cost: 1 }, //20
+        { value: 3, cost: 1 }, //50
+      ],
+      format: (v) => `${v}`,
+    },
+    {
+      id: "range",
+      name: "Tower Range",
+      desc: "Increase tower attack range",
+      levels: [
+        { value: 1.0, cost: 0 },
+        { value: 1.2, cost: 8 },
+        { value: 1.5, cost: 12 },
+        { value: 2, cost: 20 },
+      ],
+      format: (v) => `${v.toFixed(1)}`,
+    },
+    {
+      id: "fire-rate",
+      name: "Tower Fire Rate",
+      desc: "Reduce shooting cooldown",
+      levels: [
+        { value: 1000, cost: 0 },
+        { value: 900, cost: 5 },
+        { value: 800, cost: 10 },
+        { value: 700, cost: 15 },
+        { value: 500, cost: 25 },
+        { value: 300, cost: 40 },
+      ],
+      format: (v) => `${Math.round(v)}ms`,
+    },
+    {
+      id: "base-health",
+      name: "Base Health",
+      desc: "Increase base max health",
+      levels: [
+        { value: 100, cost: 0 },
+        { value: 120, cost: 10 },
+        { value: 150, cost: 12 },
+        { value: 200, cost: 15 },
+        { value: 300, cost: 20 },
+      ],
+      format: (v) => `${v}`,
+    },
+  ];
+  private upgradeState: UpgradeState = {};
 
   constructor() {
     this.init();
@@ -102,9 +180,20 @@ class TowerDefenseGame {
       this.healthElement = document.getElementById("health-value");
       this.pointsElement = document.getElementById("points-value");
       this.waveElement = document.getElementById("wave-value");
-      this.gameOverScreen = document.getElementById("game-over-screen");
-      this.finalScoreElement = document.getElementById("final-score");
+      this.upgradeScreen = document.getElementById("upgrade-screen");
+      this.blurElement = document.getElementById("blur");
+      this.upgradePointsElement = document.getElementById("upgrade-points");
+      this.upgradeListElement = document.getElementById("upgrade-list");
+      const continueButton = document.getElementById("continue-btn");
       this.restartButton = document.getElementById("restart-btn");
+      const resetUpgradesButton = document.getElementById("reset-upgrades-btn");
+
+      // Add continue button listener
+      if (continueButton) {
+        continueButton.addEventListener("click", () => {
+          this.continueGame();
+        });
+      }
 
       // Add restart button listener
       if (this.restartButton) {
@@ -112,6 +201,24 @@ class TowerDefenseGame {
           this.restartGame();
         });
       }
+
+      // Add reset upgrades button listener (DEBUG)
+      if (resetUpgradesButton) {
+        resetUpgradesButton.addEventListener("click", () => {
+          localStorage.removeItem("td_upgrades");
+          localStorage.removeItem("td_points");
+          this.upgradeState = {};
+          this.points = 0;
+          this.initializeTowersFromUpgrades();
+          this.renderUpgradeUI();
+          this.updatePointsDisplay();
+          console.log("Upgrades and points reset!");
+        });
+      }
+
+      // Load persisted upgrade state
+      this.loadUpgradeState();
+      this.loadPoints();
 
       if (this.scene.hasLoaded) {
         this.setupGame();
@@ -136,25 +243,8 @@ class TowerDefenseGame {
       return;
     }
 
-    // Initialize towers collection: include the existing single tower and any other targets present
-    const potentialTowers = Array.from(
-      document.querySelectorAll("a-entity[mindar-image-target]")
-    ).filter((el) => el !== this.baseTarget);
-    const uniqueTowers = new Set<any>(potentialTowers);
-    if (this.towerTarget) uniqueTowers.add(this.towerTarget);
-    this.towers = Array.from(uniqueTowers).map((targetEl) => ({
-      target: targetEl,
-      sphere: null,
-      circle: null,
-      movingText: null,
-      homePosition: null,
-      lastPosition: null,
-      isMoving: false,
-      lastMovementTime: 0,
-      lastShotTime: 0,
-      fireRateMs: this.towerFireRateMs,
-      range: this.towerRange,
-    }));
+    // Initialize towers based on upgrade level
+    this.initializeTowersFromUpgrades();
 
     console.log("Tower Defense Game initialized");
 
@@ -168,6 +258,12 @@ class TowerDefenseGame {
     });
 
     // Register events for each tower instance
+    this.registerTowerEventListeners();
+
+    this.startGameLoop();
+  }
+
+  private registerTowerEventListeners() {
     this.towers.forEach((tower) => {
       tower.target.addEventListener("targetFound", () => {
         this.setupTowerVisualsForTower(tower);
@@ -180,8 +276,6 @@ class TowerDefenseGame {
         this.handleTowerLostForTower(tower);
       });
     });
-
-    this.startGameLoop();
   }
 
   private startEnemySpawning() {
@@ -197,13 +291,103 @@ class TowerDefenseGame {
     }
   }
 
+  private initializeTowersFromUpgrades() {
+    const towerCountLevel = this.upgradeState["tower-count"] ?? 0;
+    const maxTowers = 1 + towerCountLevel; // Level 0 = 1 tower, Level 1 = 2 towers, Level 2 = 3 towers, etc.
+
+    // Collect all tower targets by class (regardless of mindar-image-target state)
+    const allTowerElements = Array.from(
+      document.querySelectorAll("a-entity.tower")
+    );
+
+    // Show/hide tower elements based on unlock level
+    allTowerElements.forEach((el, idx) => {
+      const elAny = el as any;
+      if (idx < maxTowers) {
+        // Unlock this tower - make visible and ensure mindar tracking
+        elAny.setAttribute("visible", "true");
+        if (elAny.object3D) elAny.object3D.visible = true;
+        // Show all children
+        el.querySelectorAll("*").forEach((child) => {
+          (child as any).setAttribute("visible", "true");
+          if ((child as any).object3D) (child as any).object3D.visible = true;
+        });
+        // Restore mindar-image-target if it was removed
+        if (!el.hasAttribute("mindar-image-target")) {
+          elAny.setAttribute("mindar-image-target", `targetIndex: ${idx + 1}`);
+        }
+      } else {
+        // Lock this tower - hide it completely and remove from tracking
+        elAny.setAttribute("visible", "false");
+        if (elAny.object3D) elAny.object3D.visible = false;
+        // Hide all children
+        el.querySelectorAll("*").forEach((child) => {
+          (child as any).setAttribute("visible", "false");
+          if ((child as any).object3D) (child as any).object3D.visible = false;
+        });
+        elAny.removeAttribute("mindar-image-target");
+      }
+    });
+
+    // Only keep the towers we have unlocked for gameplay
+    const activeTowers = allTowerElements.slice(0, maxTowers);
+
+    this.towers = activeTowers.map((targetEl) => ({
+      target: targetEl,
+      sphere: null,
+      circle: null,
+      movingText: null,
+      homePosition: null,
+      lastPosition: null,
+      isMoving: false,
+      lastMovementTime: 0,
+      lastShotTime: 0,
+      fireRateMs: this.towerFireRateMs,
+      range: this.towerRange,
+    }));
+
+    console.log(
+      `Initialized ${this.towers.length} tower(s) from upgrade level ${towerCountLevel}`
+    );
+  }
+
+  private reinitializeTowersAfterUpgrades() {
+    // Deactivate all towers first
+    this.towers.forEach((tower) => {
+      this.setTowerActiveForTower(tower, false);
+      if (tower.movingText) {
+        try {
+          tower.target.removeChild(tower.movingText);
+        } catch {}
+        tower.movingText = null;
+      }
+    });
+
+    // Re-initialize towers based on new upgrade level
+    this.initializeTowersFromUpgrades();
+
+    // Re-register events for new towers
+    this.towers.forEach((tower) => {
+      tower.target.addEventListener("targetFound", () => {
+        this.setupTowerVisualsForTower(tower);
+        if (tower.isMoving) {
+          this.setTowerActiveForTower(tower, false);
+        }
+        tower.homePosition = null;
+      });
+      tower.target.addEventListener("targetLost", () => {
+        this.handleTowerLostForTower(tower);
+      });
+    });
+  }
+
   private resumeWave() {
     if (!this.pausedWaveConfig || this.currentWave === 0) return;
 
     const waveConfig = this.pausedWaveConfig;
     const spawnInterval = Math.max(
       this.MIN_SPAWN_TIME,
-      Math.round(8000 / waveConfig.count)
+      Math.round(waveConfig.duration / waveConfig.count)
     );
 
     const waveCompleted = this.pausedWaveCompleted;
@@ -262,10 +446,10 @@ class TowerDefenseGame {
       clearInterval(this.spawnInterval);
     }
 
-    // Calculate spawn interval for this wave - spread spawns over ~8 seconds instead of 3
+    // Calculate spawn interval for this wave - spread spawns evenly across wave duration
     const spawnIntervalMs = Math.max(
       this.MIN_SPAWN_TIME,
-      Math.round(8000 / waveConfig.count) // spread spawns evenly across ~8 seconds
+      Math.round(waveConfig.duration / waveConfig.count)
     );
 
     // Delay wave display update to let first enemies appear in frame
@@ -352,7 +536,7 @@ class TowerDefenseGame {
     const enemyEntity = document.createElement("a-sphere");
     enemyEntity.setAttribute("id", enemyId);
     enemyEntity.setAttribute("radius", "0.05");
-    enemyEntity.setAttribute("color", "lime");
+    enemyEntity.setAttribute("color", "#CCFF33");
     enemyEntity.setAttribute("roughness", "1");
 
     const waveConfig = this.waveConfig[this.currentWave - 1];
@@ -409,12 +593,12 @@ class TowerDefenseGame {
       const elapsed = now - tower.lastShotTime;
       if (elapsed < tower.fireRateMs) {
         const t = Math.max(0, Math.min(1, elapsed / tower.fireRateMs));
-        const gray = "#aaaaaa";
-        const red = "#ff0000";
-        const color = this.lerpColorHex(gray, red, t);
+        const gray = "#330066";
+        const purple = "#6600FF";
+        const color = this.lerpColorHex(gray, purple, t);
         tower.sphere.setAttribute("color", color);
       } else {
-        tower.sphere.setAttribute("color", "#ff0000");
+        tower.sphere.setAttribute("color", "#6600FF");
       }
     });
   }
@@ -638,7 +822,7 @@ class TowerDefenseGame {
       "geometry",
       `primitive: cylinder; radius: 0.005; height: ${distance}`
     );
-    lineEntity.setAttribute("material", "color: #ff0000; opacity: 0.5");
+    lineEntity.setAttribute("material", "color: #F8349B; opacity: 0.5");
 
     lineEntity.setAttribute(
       "position",
@@ -791,7 +975,7 @@ class TowerDefenseGame {
         tower.sphere.setAttribute("opacity", "1");
       }
       if (tower.circle) {
-        tower.circle.setAttribute("color", "red");
+        tower.circle.setAttribute("color", "#6600FF");
       }
       if (tower.movingText) {
         tower.target.removeChild(tower.movingText);
@@ -804,7 +988,7 @@ class TowerDefenseGame {
         tower.sphere.setAttribute("opacity", "0");
       }
       if (tower.circle) {
-        tower.circle.setAttribute("color", "black");
+        tower.circle.setAttribute("color", "#330066");
       }
 
       if (!tower.movingText) {
@@ -852,8 +1036,19 @@ class TowerDefenseGame {
     this.health = Math.max(0, this.health);
     this.updateHealthDisplay();
 
-    if (this.health <= 0) {
-      this.endGame();
+    // Flash the base when taking damage
+    if (this.baseTarget) {
+      const baseShape = this.baseTarget.querySelector("a-icosahedron");
+      if (baseShape) {
+        baseShape.setAttribute("color", "#F8349B");
+        setTimeout(() => {
+          baseShape.setAttribute("color", "white");
+        }, 100);
+      }
+      if (this.health <= 0) {
+        baseShape?.setAttribute("color", "white");
+        this.endGame();
+      }
     }
   }
 
@@ -862,6 +1057,7 @@ class TowerDefenseGame {
 
     const added = Math.round(points * this.pointMultiplier);
     this.points += added;
+    this.savePoints();
     this.updatePointsDisplay();
   }
 
@@ -895,10 +1091,12 @@ class TowerDefenseGame {
     // Stop enemy spawning
     this.stopEnemySpawning();
 
-    // Show game over screen
-    if (this.gameOverScreen && this.finalScoreElement) {
-      this.finalScoreElement.textContent = this.points.toString();
-      this.gameOverScreen.style.display = "block";
+    // Show upgrade screen
+    if (this.upgradeScreen && this.upgradePointsElement && this.blurElement) {
+      this.upgradePointsElement.textContent = this.points.toString();
+      this.upgradeScreen.style.display = "block";
+      this.blurElement.style.display = "block";
+      this.renderUpgradeUI();
     }
 
     // Remove any tower moving texts
@@ -912,10 +1110,9 @@ class TowerDefenseGame {
     });
   }
 
-  private restartGame() {
-    // Reset game state
+  private continueGame() {
+    // Reset health to max, but keep points and upgrades
     this.health = this.defaultBaseHealth;
-    this.points = 0;
     this.gameOver = false;
 
     // Clear all enemies
@@ -937,18 +1134,222 @@ class TowerDefenseGame {
     this.updateHealthDisplay();
     this.updatePointsDisplay();
 
-    // Hide game over screen
-    if (this.gameOverScreen) {
-      this.gameOverScreen.style.display = "none";
+    // Hide upgrade screen
+    if (this.upgradeScreen) {
+      this.upgradeScreen.style.display = "none";
+    }
+    if (this.blurElement) {
+      this.blurElement.style.display = "none";
     }
 
-    // Reset towers state
-    this.towers.forEach((tower) => {
-      tower.isMoving = false;
-      this.resetTowerStateForTower(tower);
+    // Reset towers state and reinitialize based on upgrades
+    this.reinitializeTowersAfterUpgrades();
+
+    // If base still tracked, resume spawning immediately
+    if (this.baseTarget?.object3D?.visible) {
+      this.startEnemySpawning();
+    }
+
+    console.log("Game continued with upgrades preserved!");
+  }
+
+  public restartGame() {
+    // Stop any ongoing spawning and reset progression
+    this.stopEnemySpawning(true);
+
+    // Reset health and points
+    this.health = this.defaultBaseHealth;
+    this.points = 0;
+    this.savePoints();
+    this.gameOver = false;
+
+    // Clear all enemies
+    this.enemies.forEach((_, enemyId) => {
+      this.destroyEnemy(enemyId);
     });
 
+    // Reset enemy counter and wave system
+    this.enemyIdCounter = 0;
+    this.currentWave = 0;
+    this.waveActive = false;
+    this.wavePaused = false;
+    this.enemiesSpawnedInWave = 0;
+    this.spawnCount = 0;
+    this.pausedWaveConfig = null;
+    this.pausedWaveCompleted = false;
+
+    // Update UI
+    this.updateHealthDisplay();
+    this.updatePointsDisplay();
+
+    // Hide upgrade screen
+    if (this.upgradeScreen) {
+      this.upgradeScreen.style.display = "none";
+    }
+    if (this.blurElement) {
+      this.blurElement.style.display = "none";
+    }
+
+    // Reset towers state and reinitialize based on upgrades
+    this.reinitializeTowersAfterUpgrades();
+
+    // If the base is currently tracked, start spawning immediately so user doesn't need to recapture
+    if (this.baseTarget?.object3D?.visible) {
+      this.startEnemySpawning();
+    }
+
     console.log("Game restarted!");
+  }
+
+  // --- Upgrades: state + UI ---
+  private loadUpgradeState() {
+    try {
+      const raw = window.localStorage.getItem(this.UPGRADE_STORAGE_KEY);
+      if (raw) {
+        this.upgradeState = JSON.parse(raw);
+      } else {
+        this.upgradeState = this.upgradeDefs.reduce<UpgradeState>(
+          (acc, def) => {
+            acc[def.id] = 0;
+            return acc;
+          },
+          {} as UpgradeState
+        );
+        this.saveUpgradeState();
+      }
+    } catch {
+      this.upgradeState = {};
+      this.upgradeDefs.forEach((d) => (this.upgradeState[d.id] = 0));
+    }
+  }
+
+  private saveUpgradeState() {
+    try {
+      window.localStorage.setItem(
+        this.UPGRADE_STORAGE_KEY,
+        JSON.stringify(this.upgradeState)
+      );
+    } catch {}
+  }
+
+  private loadPoints() {
+    try {
+      const raw = window.localStorage.getItem(this.POINTS_STORAGE_KEY);
+      if (raw) {
+        this.points = parseInt(raw, 10);
+        this.updatePointsDisplay();
+      }
+    } catch {
+      this.points = 0;
+    }
+  }
+
+  private savePoints() {
+    try {
+      window.localStorage.setItem(
+        this.POINTS_STORAGE_KEY,
+        this.points.toString()
+      );
+    } catch {}
+  }
+
+  private getUpgradeCurrentValue(def: UpgradeDefinition<number>): number {
+    const lvl = this.upgradeState[def.id] ?? 0;
+    return def.levels[Math.min(lvl, def.levels.length - 1)].value;
+  }
+
+  private getUpgradeNextValue(def: UpgradeDefinition<number>): number {
+    const nextLvl = (this.upgradeState[def.id] ?? 0) + 1;
+    const clamped = Math.min(nextLvl, def.levels.length - 1);
+    return def.levels[clamped].value;
+  }
+
+  private getUpgradeNextCost(def: UpgradeDefinition<number>): number {
+    const nextLvl = (this.upgradeState[def.id] ?? 0) + 1;
+    if (nextLvl >= def.levels.length) return 0; // max level
+    return def.levels[nextLvl].cost;
+  }
+
+  private renderUpgradeUI() {
+    if (!this.upgradeListElement) return;
+    const list = this.upgradeListElement as HTMLElement;
+    list.innerHTML = "";
+
+    this.upgradeDefs.forEach((def) => {
+      const currentVal = this.getUpgradeCurrentValue(def);
+      const nextVal = this.getUpgradeNextValue(def);
+      const nextCost = this.getUpgradeNextCost(def);
+
+      const currentLevel = this.upgradeState[def.id] ?? 0;
+      const maxLevelReached = currentLevel >= def.levels.length - 1;
+
+      const item = document.createElement("div");
+      item.className = "upgrade-item";
+      item.innerHTML = `
+        <div class=\"upgrade-header\">
+          <span class=\"upgrade-name\">${def.name}</span>
+          <span class=\"upgrade-cost\"><span class=\"material-symbols-rounded icon-bolt-small\">bolt</span><span class=\"cost-value\">${nextCost}</span></span>
+        </div>
+        <p class=\"upgrade-desc\">${def.desc}</p>
+        <p class=\"upgrade-level\"><span class=\"level-current\">${def.format(currentVal)}</span> → <span class=\"level-next\">${def.format(nextVal)}</span></p>
+        <button class=\"upgrade-btn\" data-upgrade=\"${def.id}\">Upgrade</button>
+      `;
+
+      const btn = item.querySelector(".upgrade-btn") as HTMLElement | null;
+      if (btn) {
+        // Determine button state/text
+        let btnText = "Upgrade";
+        let disabled = false;
+        if (maxLevelReached) {
+          btnText = "Max level reached";
+          disabled = true;
+        } else if (this.points < nextCost) {
+          btnText = "Not enough points";
+          disabled = true;
+        }
+        btn.textContent = btnText;
+        if (disabled) btn.setAttribute("disabled", "true");
+        else btn.removeAttribute("disabled");
+
+        // Purchase handler - deduct points, increment level, persist, re-render
+        btn.addEventListener("click", () => {
+          if (!disabled) {
+            this.purchaseUpgrade(def.id, nextCost);
+          }
+        });
+      }
+
+      list.appendChild(item);
+    });
+  }
+
+  private purchaseUpgrade(upgradeId: UpgradeId, cost: number) {
+    // Check if player has enough points
+    if (this.points < cost) {
+      console.warn(`Not enough points for ${upgradeId}`);
+      return;
+    }
+
+    // Deduct points and persist
+    this.points -= cost;
+    this.savePoints();
+    this.updatePointsDisplay();
+
+    // Increment upgrade level
+    this.upgradeState[upgradeId] = (this.upgradeState[upgradeId] ?? 0) + 1;
+    this.saveUpgradeState();
+
+    // Re-render UI to show updated state
+    this.renderUpgradeUI();
+
+    // If tower-count was purchased, immediately reinitialize towers so new ones appear
+    if (upgradeId === "tower-count") {
+      this.reinitializeTowersAfterUpgrades();
+    }
+
+    console.log(
+      `Purchased ${upgradeId} to level ${this.upgradeState[upgradeId]}`
+    );
   }
 
   public cleanup() {
