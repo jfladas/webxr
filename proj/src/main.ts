@@ -123,8 +123,8 @@ class TowerDefenseGame {
       desc: "Add an additional tower",
       levels: [
         { value: 1, cost: 0 },
-        { value: 2, cost: 1 }, //20
-        { value: 3, cost: 1 }, //50
+        { value: 2, cost: 20 },
+        { value: 3, cost: 50 },
       ],
       format: (v) => `${v}`,
     },
@@ -188,35 +188,11 @@ class TowerDefenseGame {
       this.blurElement = document.getElementById("blur");
       this.upgradePointsElement = document.getElementById("upgrade-points");
       this.upgradeListElement = document.getElementById("upgrade-list");
-      const continueButton = document.getElementById("continue-btn");
       this.restartButton = document.getElementById("restart-btn");
-      const resetUpgradesButton = document.getElementById("reset-upgrades-btn");
-
-      // Add continue button listener
-      if (continueButton) {
-        continueButton.addEventListener("click", () => {
-          this.continueGame();
-        });
-      }
-
       // Add restart button listener
       if (this.restartButton) {
         this.restartButton.addEventListener("click", () => {
           this.restartGame();
-        });
-      }
-
-      // Add reset upgrades button listener (DEBUG)
-      if (resetUpgradesButton) {
-        resetUpgradesButton.addEventListener("click", () => {
-          localStorage.removeItem("td_upgrades");
-          localStorage.removeItem("td_points");
-          this.upgradeState = {};
-          this.points = 0;
-          this.initializeTowersFromUpgrades();
-          this.renderUpgradeUI();
-          this.updatePointsDisplay();
-          console.log("Upgrades and points reset!");
         });
       }
 
@@ -1191,49 +1167,6 @@ class TowerDefenseGame {
         tower.movingText = null;
       }
     });
-  }
-
-  private continueGame() {
-    // Reset health to max, but keep points and upgrades
-    this.health = this.defaultBaseHealth;
-    this.gameOver = false;
-
-    // Clear all enemies
-    this.enemies.forEach((_, enemyId) => {
-      this.destroyEnemy(enemyId);
-    });
-
-    // Reset enemy counter and wave system
-    this.enemyIdCounter = 0;
-    this.currentWave = 0;
-    this.waveActive = false;
-    this.wavePaused = false;
-    this.enemiesSpawnedInWave = 0;
-    this.spawnCount = 0;
-    this.pausedWaveConfig = null;
-    this.pausedWaveCompleted = false;
-
-    // Update UI
-    this.updateHealthDisplay();
-    this.updatePointsDisplay();
-
-    // Hide upgrade screen
-    if (this.upgradeScreen) {
-      this.upgradeScreen.style.display = "none";
-    }
-    if (this.blurElement) {
-      this.blurElement.style.display = "none";
-    }
-
-    // Reset towers state and reinitialize based on upgrades
-    this.reinitializeTowersAfterUpgrades();
-
-    // If base still tracked, resume spawning immediately
-    if (this.baseTarget?.object3D?.visible) {
-      this.startEnemySpawning();
-    }
-
-    console.log("Game continued with upgrades preserved!");
   }
 
   public restartGame() {
