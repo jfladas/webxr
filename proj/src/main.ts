@@ -57,6 +57,7 @@ class TowerDefenseGame {
   private health = 100;
   private points = 0;
   private gameOver = false;
+  private gameWon = false;
 
   // UI elements
   private healthElement: HTMLElement | null = null;
@@ -67,13 +68,20 @@ class TowerDefenseGame {
   private upgradePointsElement: HTMLElement | null = null;
   private restartButton: HTMLElement | null = null;
   private upgradeListElement: HTMLElement | null = null;
+  private winPopup: HTMLElement | null = null;
+  private winBlur: HTMLElement | null = null;
+  private winRestartButton: HTMLElement | null = null;
+  private winResetButton: HTMLElement | null = null;
+  private winAttemptsElement: HTMLElement | null = null;
+  private shopVisits = 0;
+  private readonly SHOP_VISITS_STORAGE_KEY = "td_shop_visits";
 
   // Tower state tracking (per-tower handled via towers[])
   private readonly MOVEMENT_THRESHOLD = 0.3;
   private readonly STABILITY_TIME = 2000;
   // Upgradeable tower properties
-  private readonly TOWER_BASE_RANGE = 1000;
-  private readonly TOWER_BASE_RADIUS = 1; // visual circle radius baseline
+  private readonly TOWER_BASE_RANGE = 700;
+  private readonly TOWER_BASE_RADIUS = 0.7; // visual circle radius baseline
   private towerFireRateMs: number = 2000;
   private towerRange: number = this.TOWER_BASE_RANGE;
   // Multi-tower support
@@ -189,10 +197,27 @@ class TowerDefenseGame {
       this.upgradePointsElement = document.getElementById("upgrade-points");
       this.upgradeListElement = document.getElementById("upgrade-list");
       this.restartButton = document.getElementById("restart-btn");
+      this.winPopup = document.getElementById("win-popup");
+      this.winBlur = document.getElementById("win-blur");
+      this.winResetButton = document.getElementById("win-reset-btn");
+      this.winAttemptsElement = document.getElementById("win-attempts");
       // Add restart button listener
       if (this.restartButton) {
         this.restartButton.addEventListener("click", () => {
           this.restartGame();
+        });
+      }
+
+      if (this.winRestartButton) {
+        this.winRestartButton.addEventListener("click", () => {
+          this.hideWinPopup();
+          this.restartGame();
+        });
+      }
+
+      if (this.winResetButton) {
+        this.winResetButton.addEventListener("click", () => {
+          this.resetAllProgress();
         });
       }
 
@@ -226,6 +251,7 @@ class TowerDefenseGame {
       // Load persisted upgrade state
       this.loadUpgradeState();
       this.loadPoints();
+      this.loadShopVisits();
       this.applyUpgradeEffects();
 
       if (this.scene.hasLoaded) {
@@ -324,6 +350,10 @@ class TowerDefenseGame {
   }
 
   private startEnemySpawning() {
+    if (this.gameWon) {
+      return;
+    }
+
     if (this.wavePaused && this.currentWave > 0) {
       // Resume a paused wave
       this.wavePaused = false;
@@ -743,6 +773,8 @@ class TowerDefenseGame {
         `${newPosition.x} ${newPosition.y} ${newPosition.z}`
       );
     });
+
+    this.checkWinCondition();
   }
 
   private destroyEnemy(enemyId: string) {
@@ -753,6 +785,8 @@ class TowerDefenseGame {
       }
       this.enemies.delete(enemyId);
     }
+
+    this.checkWinCondition();
   }
 
   private isTowerVisible(tower: TowerInstance): boolean {
@@ -1144,8 +1178,59 @@ class TowerDefenseGame {
     }
   }
 
+  private checkWinCondition() {
+    if (this.gameWon) return;
+
+    const onFinalWave =
+      this.currentWave === this.totalWaves && this.currentWave > 0;
+    if (!onFinalWave) return;
+
+    const finalWaveConfig = this.waveConfig[this.totalWaves - 1];
+    const finishedSpawningFinalWave =
+      this.enemiesSpawnedInWave >= finalWaveConfig.count &&
+      this.spawnInterval === null &&
+      !this.waveActive &&
+      !this.wavePaused;
+
+    if (finishedSpawningFinalWave && this.enemies.size === 0) {
+      this.handleWin();
+    }
+  }
+
+  private handleWin() {
+    this.gameWon = true;
+    this.gameOver = true;
+    this.waveActive = false;
+    this.wavePaused = false;
+
+    // Stop any lingering spawning without wiping progression values
+    this.stopEnemySpawning(false);
+
+    if (this.upgradeScreen) {
+      this.upgradeScreen.style.display = "none";
+    }
+    if (this.blurElement) {
+      this.blurElement.style.display = "none";
+    }
+
+    const attempts = this.shopVisits + 1;
+    if (this.winAttemptsElement) {
+      this.winAttemptsElement.textContent = `Attempts to win: ${attempts}`;
+    }
+
+    if (this.winPopup) {
+      this.winPopup.style.display = "flex";
+    }
+    if (this.winBlur) {
+      this.winBlur.style.display = "block";
+    }
+  }
+
   private endGame() {
     this.gameOver = true;
+
+    // Record a shop visit (defeat) for attempt tracking
+    this.recordShopVisit();
 
     // Stop enemy spawning
     this.stopEnemySpawning();
@@ -1178,6 +1263,7 @@ class TowerDefenseGame {
     this.points = 0;
     this.savePoints();
     this.gameOver = false;
+    this.gameWon = false;
 
     // Clear all enemies
     this.enemies.forEach((_, enemyId) => {
@@ -1197,6 +1283,7 @@ class TowerDefenseGame {
     // Update UI
     this.updateHealthDisplay();
     this.updatePointsDisplay();
+    this.updateWaveDisplay();
 
     // Hide upgrade screen
     if (this.upgradeScreen) {
@@ -1205,6 +1292,8 @@ class TowerDefenseGame {
     if (this.blurElement) {
       this.blurElement.style.display = "none";
     }
+
+    this.hideWinPopup();
 
     // Reset towers state and reinitialize based on upgrades
     this.reinitializeTowersAfterUpgrades();
@@ -1215,6 +1304,26 @@ class TowerDefenseGame {
     }
 
     console.log("Game restarted!");
+  }
+
+  private resetAllProgress() {
+    try {
+      window.localStorage.removeItem(this.UPGRADE_STORAGE_KEY);
+      window.localStorage.removeItem(this.POINTS_STORAGE_KEY);
+      window.localStorage.removeItem(this.SHOP_VISITS_STORAGE_KEY);
+    } catch {}
+
+    // Reload to ensure a clean state with cleared storage
+    window.location.reload();
+  }
+
+  private hideWinPopup() {
+    if (this.winPopup) {
+      this.winPopup.style.display = "none";
+    }
+    if (this.winBlur) {
+      this.winBlur.style.display = "none";
+    }
   }
 
   // --- Upgrades: state + UI ---
@@ -1260,6 +1369,26 @@ class TowerDefenseGame {
     }
   }
 
+  private loadShopVisits() {
+    try {
+      const raw = window.localStorage.getItem(this.SHOP_VISITS_STORAGE_KEY);
+      if (raw) {
+        this.shopVisits = parseInt(raw, 10) || 0;
+      }
+    } catch {
+      this.shopVisits = 0;
+    }
+  }
+
+  private saveShopVisits() {
+    try {
+      window.localStorage.setItem(
+        this.SHOP_VISITS_STORAGE_KEY,
+        this.shopVisits.toString()
+      );
+    } catch {}
+  }
+
   private savePoints() {
     try {
       window.localStorage.setItem(
@@ -1267,6 +1396,11 @@ class TowerDefenseGame {
         this.points.toString()
       );
     } catch {}
+  }
+
+  private recordShopVisit() {
+    this.shopVisits += 1;
+    this.saveShopVisits();
   }
 
   private getUpgradeCurrentValueById(id: UpgradeId): number {
@@ -1335,7 +1469,7 @@ class TowerDefenseGame {
 
       // Build progress bar with segments
       let progressBarHTML = '<div class=\"upgrade-progress\">';
-      for (let i = 0; i < totalLevels; i++) {
+      for (let i = 0; i + 1 < totalLevels; i++) {
         const filled = i <= currentLevel ? "filled" : "";
         progressBarHTML += `<div class=\"progress-segment ${filled}\"></div>`;
       }
