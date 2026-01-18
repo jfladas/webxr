@@ -4,26 +4,82 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TD</title>
+  <meta name="color-scheme" content="dark" />
+  <title>AR Tower Defense</title>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-  <script type="module" crossorigin src="./assets/index-CEaqw5Js.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-Bg1dU8RF.css">
+  <script type="module" crossorigin src="./assets/index-DBIZNmG-.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-aaGRO-7K.css">
 </head>
 
 <body>
   <div id="game-overlay">
     <div id="game-stats">
-      <div id="health-display">Health: <span id="health-value">100</span></div>
-      <div id="points-display">Points: <span id="points-value">0</span></div>
+      <div id="wave-display">Wave <span id="wave-value">0</span>/10</div>
+      <div id="health-display"><span class="material-symbols-rounded icon-heart">favorite</span><span
+          id="health-value">100</span></div>
+      <div id="points-display"><span class="material-symbols-rounded icon-bolt">bolt</span><span
+          id="points-value">0</span></div>
+
     </div>
-    <div id="game-over-screen" style="display: none;">
-      <h2>Game Over!</h2>
-      <p>Final Score: <span id="final-score">0</span></p>
-      <button id="restart-btn">Restart Game</button>
+    <button id="help-btn" class="help-btn"><span class="material-symbols-rounded">help</span></button>
+    <div id="blur"></div>
+    <div id="upgrade-screen" style="display: none;">
+      <h2>Defeat!</h2>
+      <div id="upgrade-stats">
+        <p><span class="material-symbols-rounded icon-bolt">bolt</span><span id="upgrade-points">0</span></p>
+      </div>
+      <div id="upgrade-list"></div>
+      <div id="button-group">
+        <button id="reset-upgrades-btn" style="background-color: #666; font-size: 0.8em;">Reset Upgrades</button>
+        <button id="restart-btn">Restart</button>
+      </div>
+    </div>
+
+    <!-- Help Popup -->
+    <div id="help-popup" style="display: none;">
+      <div id="help-blur"></div>
+      <div id="help-popup-content">
+        <button id="close-help" class="close-btn"><span class="material-symbols-rounded">close</span></button>
+        <h2>Game Info</h2>
+        <div class="help-section">
+          <h3>About</h3>
+          <p>AR Tower Defense by jfladas <br>HSLU, WEBXR HS2025</p>
+        </div>
+        <div class="help-section">
+          <h3>Save Data</h3>
+          <p>Your <strong>points</strong> and <strong>upgrades</strong> are automatically saved. If any issues occur,
+            simply reload the page and your progress will be restored.</p>
+        </div>
+        <div class="help-section">
+          <h3>Markers</h3>
+          <p>The game requires AR image markers to play. Download the PDF below, then print and cut them out to get
+            started!</p>
+          <a href="/markers.pdf" download class="download-btn"><span
+              class="material-symbols-rounded">download</span>Download Markers</a>
+        </div>
+      </div>
     </div>
   </div>
-  <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 4; filterMinCF:0.0001; filterBeta: 0.001"
+
+  <!-- Desktop Popup -->
+  <div id="desktop-popup" style="display: none;">
+    <div id="blur"></div>
+    <div id="desktop-popup-content">
+      <button id="close-popup" class="close-btn"><span class="material-symbols-rounded">close</span></button>
+      <h2>Mobile Game</h2>
+      <p>This game is optimized for mobile devices.</p>
+      <div id="qr-container">
+        <img src="./qr.png" alt="QR Code" id="qr-code" />
+      </div>
+      <p class="popup-text">Scan the QR code to open on mobile</p>
+      <a href="/markers.pdf" download class="download-btn"><span
+          class="material-symbols-rounded">download</span>Download Markers</a>
+    </div>
+  </div>
+  <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 4; filterMinCF:0.00001; filterBeta: 0.01"
     color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
     <a-assets>
@@ -32,27 +88,30 @@
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
     <!-- Base (Target 0) - Silver Icosahedron -->
-    <a-entity mindar-image-target="targetIndex: 0">
+    <a-entity mindar-image-target="targetIndex: 0" scale="1 1 1">
       <a-icosahedron position="0 0 0" radius="0.5" color="white" opacity="1" metalness="0.5" roughness="0.3"
         animation="property: rotation; to: 0 0 360; loop: true; dur: 10000; elasticity: 0; easing: linear"></a-icosahedron>
     </a-entity>
 
-    <!-- Tower (Target 1) - Red Sphere with Range Circle -->
-    <a-entity mindar-image-target="targetIndex: 1">
-      <a-circle position="0 0 0.01" radius="1" color="red" opacity="0.1"></a-circle>
-      <a-sphere position="0 0 0.1" radius="0.2" color="red" roughness="1"></a-sphere>
+    <!-- Tower (Target 1) - Purple Sphere with Range Circle -->
+    <a-entity class="tower" mindar-image-target="targetIndex: 1" scale="1 1 1">
+      <a-circle position="0 0 0.01" radius="1" color="#6600FF" opacity="0.1"></a-circle>
+      <a-sphere position="0 0 0.1" radius="0.25" color="#6600FF" roughness="1"></a-sphere>
     </a-entity>
 
-    <!-- 
-    <a-entity mindar-image-target="targetIndex: 2">
-      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#4CC3D9" opacity="0.7"></a-plane>
-      <a-box position="0 0 0.1" rotation="0 45 0" color="#4CC3D9" depth="0.2" height="0.2" width="0.2"></a-cube>
+    <!-- Second Tower (Target 2) - Purple Cube with Range Circle -->
+    <a-entity class="tower" mindar-image-target="targetIndex: 2" scale="1 1 1" visible="false">
+      <a-circle position="0 0 0.01" radius="1" color="#6600FF" opacity="0.1"></a-circle>
+      <a-box position="0 0 0.1" width="0.4" height="0.4" depth="0.4" color="#6600FF" roughness="1"></a-box>
     </a-entity>
-    <a-entity mindar-image-target="targetIndex: 3">
-      <a-plane position="0 0 0" rotation="0 0 0" width="1" height="1" color="#39A0ED" opacity="0.7"></a-plane>
-      <a-cone position="0 0 0.1" radius-bottom="0.1" height="0.2" color="#39A0ED"></a-cone>
-    </a-entity> 
-    -->
+
+    <!-- Third Tower (Target 3) - Purple Pyramid with Range Circle -->
+    <a-entity class="tower" mindar-image-target="targetIndex: 3" scale="1 1 1" visible="false">
+      <a-circle position="0 0 0.01" radius="1" color="#6600FF" opacity="0.1"></a-circle>
+      <a-tetrahedron position="0 0 0.1" scale="0.5 0.5 0.5" color="#6600FF" roughness="1"></a-tetrahedron>
+    </a-entity>
+
+    <!-- Optional additional targets can be added here -->
   </a-scene>
 
 </body>
