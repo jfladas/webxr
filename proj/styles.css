@@ -1,13 +1,14 @@
 @font-face {
     font-family: 'Avenir Next';
-    src: url('Avenir Next LT Pro Regular.otf') format('opentype');
+    /* Use absolute paths so the built CSS (emitted to /assets) still finds fonts copied from /public */
+    src: url('/Avenir Next LT Pro Regular.otf') format('opentype');
     font-weight: 400;
     font-style: normal;
 }
 
 @font-face {
     font-family: 'Avenir Next';
-    src: url('Avenir Next LT Pro Demi.otf') format('opentype');
+    src: url('/Avenir Next LT Pro Demi.otf') format('opentype');
     font-weight: 600;
     font-style: normal;
 }
