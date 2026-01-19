@@ -1,6 +1,5 @@
 @font-face {
     font-family: 'Avenir Next';
-    /* Use absolute paths so the built CSS (emitted to /assets) still finds fonts copied from /public */
     src: url('/Avenir Next LT Pro Regular.otf') format('opentype');
     font-weight: 400;
     font-style: normal;
@@ -27,17 +26,40 @@
     z-index: 1000;
 }
 
+#wave-start-indicator {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translate(-50%, 0);
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #FFFFFF;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 1200;
+}
+
+#wave-start-indicator.show {
+    opacity: 1;
+}
+
 #game-stats {
     position: absolute;
     top: 20px;
     left: 20px;
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     color: white;
-    padding: 15px;
-    border-radius: 10px;
+    padding: 10px 14px;
+    border-radius: 12px;
     font-size: 18px;
-    pointer-events: auto;
+    pointer-events: none;
 }
 
 #game-stats div {
@@ -54,12 +76,11 @@
     right: 20px;
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     color: white;
     border: none;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    font-size: 24px;
+    border-radius: 12px;
+    padding: 10px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -115,6 +136,11 @@
     font-size: 16px;
     vertical-align: middle;
     margin-bottom: 4px;
+}
+
+.icon-help {
+    font-size: 20px;
+    vertical-align: middle;
 }
 
 #health-display {
@@ -173,6 +199,7 @@
     width: 100%;
     height: 100%;
     backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     pointer-events: none;
     display: none;
 }
@@ -236,8 +263,9 @@
     left: 0;
     width: 100%;
     height: 100%;
-    backdrop-filter: blur(8px);
-    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    background: rgba(0, 0, 0, 0.7);
     display: none;
     pointer-events: none;
     z-index: 998;
@@ -257,10 +285,10 @@
 }
 
 #win-content {
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.7);
     color: white;
     padding: 32px;
-    border-radius: 14px;
+    border-radius: 12px;
     text-align: center;
     min-width: 70%;
     max-width: 90%;
@@ -322,7 +350,7 @@
 
 .upgrade-desc {
     color: #aaaaaa;
-    font-size: 13px;
+    font-size: 14px;
     margin: 5px 0 3px 0;
 }
 
@@ -368,7 +396,7 @@
     border: none;
     padding: 8px 12px;
     font-size: 14px;
-    border-radius: 5px;
+    border-radius: 4px;
     cursor: pointer;
     font-weight: 600;
     width: 100%;
@@ -516,6 +544,7 @@
     width: 100%;
     height: 100%;
     backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     pointer-events: all;
     display: none;
 }
@@ -531,11 +560,12 @@
     width: 60vw;
     min-width: min-content;
     max-width: 350px;
-    max-height: 80vh;
+    max-height: 60vh;
     overflow-y: auto;
     text-align: left;
     z-index: 999;
     color: white;
+    scrollbar-width: none;
 }
 
 #help-popup-content h2 {
@@ -581,4 +611,132 @@ strong.pink {
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+.mindar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.mindar-overlay--loading {
+    z-index: 2000;
+}
+
+@keyframes mindar-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.mindar-loading-spinner {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 14px solid transparent;
+    border-top-color: rgba(255, 255, 255, 0.3);
+    animation: mindar-spin 1s linear infinite;
+}
+
+.mindar-loading-spinner::before {
+    content: "";
+    position: absolute;
+    inset: -14px;
+    border-radius: 50%;
+    background: transparent;
+    backdrop-filter: blur(6px) saturate(120%);
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+
+.mindar-overlay--scanning {
+    justify-content: center;
+}
+
+.mindar-scan-mask {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A//www.w3.org/2000/svg'%20viewBox%3D'0%200%20100%20100'%20preserveAspectRatio%3D'none'%3E%3Crect%20width%3D'100'%20height%3D'100'%20fill%3D'white'/%3E%3Crect%20x%3D'30'%20y%3D'30'%20width%3D'40'%20height%3D'40'%20rx%3D'10'%20ry%3D'10'%20fill%3D'black'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A//www.w3.org/2000/svg'%20viewBox%3D'0%200%20100%20100'%20preserveAspectRatio%3D'none'%3E%3Crect%20width%3D'100'%20height%3D'100'%20fill%3D'white'/%3E%3Crect%20x%3D'30'%20y%3D'30'%20width%3D'40'%20height%3D'40'%20rx%3D'10'%20ry%3D'10'%20fill%3D'black'/%3E%3C/svg%3E");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+}
+
+.mindar-scan-window {
+    position: relative;
+    width: min(300px, 60vw);
+    aspect-ratio: 1 / 1;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    overflow: hidden;
+    background: transparent;
+}
+
+.mindar-scan-bar {
+    position: absolute;
+    left: -20%;
+    right: -20%;
+    height: 22px;
+    top: -30px;
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.00),
+            rgba(255, 255, 255, 0.10),
+            rgba(255, 255, 255, 0.00));
+    backdrop-filter: blur(6px) saturate(120%);
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+    opacity: 0.95;
+    animation: mindar-scan 2.1s ease-in-out infinite;
+}
+
+@keyframes mindar-scan {
+    0% {
+        top: -30px;
+        opacity: 0.0;
+    }
+
+    10% {
+        opacity: 0.95;
+    }
+
+    50% {
+        top: calc(100% + 30px);
+        opacity: 0.65;
+    }
+
+    90% {
+        opacity: 0.95;
+    }
+
+    100% {
+        top: -30px;
+        opacity: 0.0;
+    }
+}
+
+.mindar-overlay--error {
+    z-index: 2000;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: max(24px, env(safe-area-inset-top));
+}
+
+.mindar-error-text {
+    position: relative;
+    max-width: min(520px, 90vw);
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.16);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 14px;
+    text-align: center;
 }

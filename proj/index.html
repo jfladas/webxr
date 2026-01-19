@@ -23,7 +23,10 @@
           id="energy-value">0</span></div>
 
     </div>
-    <button id="help-btn" class="help-btn"><span class="material-symbols-rounded">help</span></button>
+
+    <div id="wave-start-indicator" aria-live="polite" style="display: none;"></div>
+
+    <button id="help-btn" class="help-btn"><span class="material-symbols-rounded icon-help">help</span></button>
     <div id="blur"></div>
     <div id="upgrade-screen" style="display: none;">
       <h2>Defeat!</h2>
@@ -108,7 +111,27 @@
           class="material-symbols-rounded">download</span>Download Markers</a>
     </div>
   </div>
-  <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 4; filterMinCF:0.00001; filterBeta: 0.01"
+
+  <!-- MindAR Custom UI Overlays (referenced by mindar-image uiLoading/uiScanning/uiError) -->
+  <div id="custom-loading" class="mindar-overlay mindar-overlay--loading">
+    <div class="mindar-loading-spinner" aria-hidden="true"></div>
+  </div>
+
+  <div id="custom-scanning" class="mindar-overlay mindar-overlay--scanning">
+    <div class="mindar-scan-mask"></div>
+    <div class="mindar-scan-window" aria-hidden="true">
+      <div class="mindar-scan-bar"></div>
+    </div>
+  </div>
+
+  <div id="custom-error" class="mindar-overlay mindar-overlay--error">
+    <div class="mindar-error-text">
+      Camera access is required. <br>Allow permission and reload.
+    </div>
+  </div>
+
+  <a-scene
+    mindar-image="imageTargetSrc: targets.mind; maxTrack: 4; filterMinCF:0.0001; filterBeta: 0.0001; uiError: #custom-error; uiLoading: #custom-loading; uiScanning: #custom-scanning;"
     color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
     <a-assets>
@@ -124,19 +147,19 @@
 
     <!-- Tower (Target 1) - Purple Sphere with Range Circle -->
     <a-entity class="tower" mindar-image-target="targetIndex: 1" scale="1 1 1">
-      <a-circle position="0 0 0.01" opacity="0.1"></a-circle>
+      <a-circle position="0 0 0.01" opacity="0.2"></a-circle>
       <a-sphere position="0 0 0.1" radius="0.25" color="#6600FF" roughness="1"></a-sphere>
     </a-entity>
 
     <!-- Second Tower (Target 2) - Purple Cube with Range Circle -->
     <a-entity class="tower" mindar-image-target="targetIndex: 2" scale="1 1 1" visible="false">
-      <a-circle position="0 0 0.01" radius="1" opacity="0.1"></a-circle>
+      <a-circle position="0 0 0.01" radius="1" opacity="0.2"></a-circle>
       <a-box position="0 0 0.1" width="0.4" height="0.4" depth="0.4" color="#6600FF" roughness="1"></a-box>
     </a-entity>
 
     <!-- Third Tower (Target 3) - Purple Pyramid with Range Circle -->
     <a-entity class="tower" mindar-image-target="targetIndex: 3" scale="1 1 1" visible="false">
-      <a-circle position="0 0 0.01" radius="1" opacity="0.1"></a-circle>
+      <a-circle position="0 0 0.01" radius="1" opacity="0.2"></a-circle>
       <a-tetrahedron position="0 0 0.1" scale="0.5 0.5 0.5" color="#6600FF" roughness="1"></a-tetrahedron>
     </a-entity>
 

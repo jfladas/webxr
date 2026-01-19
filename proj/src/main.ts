@@ -16,6 +16,7 @@ interface TowerInstance {
   sphere: any | null;
   circle: any | null;
   movingText: any | null;
+  buildRing: any | null;
   homePosition: Position2D | null;
   lastPosition: Position2D | null;
   isMoving: boolean;
@@ -63,6 +64,8 @@ class TowerDefenseGame {
   private healthElement: HTMLElement | null = null;
   private pointsElement: HTMLElement | null = null;
   private waveElement: HTMLElement | null = null;
+  private waveStartIndicator: HTMLElement | null = null;
+  private waveStartIndicatorTimeout: number | null = null;
   private upgradeScreen: HTMLElement | null = null;
   private blurElement: HTMLElement | null = null;
   private upgradePointsElement: HTMLElement | null = null;
@@ -76,12 +79,19 @@ class TowerDefenseGame {
   private shopVisits = 0;
   private readonly SHOP_VISITS_STORAGE_KEY = "td_shop_visits";
 
+  // MindAR overlay elements (custom UI)
+  private mindarLoadingOverlay: HTMLElement | null = null;
+  private mindarScanningOverlay: HTMLElement | null = null;
+  private mindarErrorOverlay: HTMLElement | null = null;
+  private mindarTrackedCount = 0;
+
   // Tower state tracking (per-tower handled via towers[])
   private readonly MOVEMENT_THRESHOLD = 0.3;
   private readonly STABILITY_TIME = 2000;
   private towerLostTimes: Map<any, number> = new Map(); // Track when each tower was last lost
   private readonly TOWER_LOST_GRACE_PERIOD = 100; // ms to wait after targetLost before allowing attacks again
   private towerTrackedTargets: WeakSet<any> = new WeakSet();
+  private towerListenerTargets: WeakSet<any> = new WeakSet();
   // Upgradeable tower properties
   private readonly TOWER_BASE_RANGE = 700;
   private readonly TOWER_BASE_RADIUS = 0.7; // visual circle radius baseline
@@ -200,10 +210,16 @@ class TowerDefenseGame {
     document.addEventListener("DOMContentLoaded", () => {
       this.scene = document.querySelector("a-scene");
 
+      this.mindarLoadingOverlay = document.getElementById("custom-loading");
+      this.mindarScanningOverlay = document.getElementById("custom-scanning");
+      this.mindarErrorOverlay = document.getElementById("custom-error");
+      this.setupMindarOverlayUi();
+
       // Initialize UI elements
       this.healthElement = document.getElementById("health-value");
       this.pointsElement = document.getElementById("energy-value");
       this.waveElement = document.getElementById("wave-value");
+      this.waveStartIndicator = document.getElementById("wave-start-indicator");
       this.upgradeScreen = document.getElementById("upgrade-screen");
       this.blurElement = document.getElementById("blur");
       this.upgradePointsElement = document.getElementById("upgrade-energy");
@@ -288,6 +304,59 @@ class TowerDefenseGame {
     });
   }
 
+  private setMindarOverlayVisible(el: HTMLElement | null, visible: boolean) {
+    if (!el) return;
+    el.style.display = visible ? "flex" : "none";
+  }
+
+  private showMindarOverlay(kind: "loading" | "scanning" | "error" | "none") {
+    this.setMindarOverlayVisible(this.mindarLoadingOverlay, kind === "loading");
+    this.setMindarOverlayVisible(
+      this.mindarScanningOverlay,
+      kind === "scanning",
+    );
+    this.setMindarOverlayVisible(this.mindarErrorOverlay, kind === "error");
+  }
+
+  private setupMindarOverlayUi() {
+    // Default state: show loading until MindAR says it's ready.
+    this.showMindarOverlay("loading");
+
+    if (!this.scene) return;
+
+    // MindAR lifecycle events
+    this.scene.addEventListener(
+      "arReady",
+      () => {
+        this.mindarTrackedCount = 0;
+        this.showMindarOverlay("scanning");
+      },
+      { once: true },
+    );
+
+    this.scene.addEventListener("arError", () => {
+      this.showMindarOverlay("error");
+    });
+
+    // Target events (bubble on most implementations, but we attach directly to be safe)
+    const targets = Array.from(
+      document.querySelectorAll("[mindar-image-target]"),
+    ) as any[];
+
+    targets.forEach((el) => {
+      el.addEventListener("targetFound", () => {
+        this.mindarTrackedCount += 1;
+        this.showMindarOverlay("none");
+      });
+      el.addEventListener("targetLost", () => {
+        this.mindarTrackedCount = Math.max(0, this.mindarTrackedCount - 1);
+        if (this.mindarTrackedCount === 0) {
+          this.showMindarOverlay("scanning");
+        }
+      });
+    });
+  }
+
   private showDesktopPopupIfNeeded() {
     // Detect if device is mobile or desktop
     const isMobile =
@@ -335,8 +404,6 @@ class TowerDefenseGame {
       return;
     }
 
-    console.log("Tower Defense Game initialized");
-
     this.baseTarget.addEventListener("targetFound", () => {
       this.startEnemySpawning();
     });
@@ -351,9 +418,11 @@ class TowerDefenseGame {
 
   private registerTowerEventListeners() {
     this.towers.forEach((tower) => {
-      // Avoid double-registering listeners if this method is called more than once.
-      // (We intentionally keep this simple: if already registered, the events will just be duplicated,
-      // so we guard by removing and re-adding isn't trivial here. We instead rely on early init calling this once.)
+      if (this.towerListenerTargets.has(tower.target)) {
+        return;
+      }
+      this.towerListenerTargets.add(tower.target);
+
       tower.target.addEventListener("targetFound", () => {
         this.towerTrackedTargets.add(tower.target);
         this.towerLostTimes.delete(tower.target);
@@ -372,6 +441,23 @@ class TowerDefenseGame {
         this.towerLostTimes.set(tower.target, Date.now());
         this.handleTowerLostForTower(tower);
       });
+    });
+  }
+
+  private forceTrackedTowersIntoBuildingState() {
+    this.towers.forEach((tower) => {
+      if (!tower.target?.object3D?.visible) return;
+      if (!this.towerTrackedTargets.has(tower.target)) return;
+
+      // Reset to building state even if targetFound doesn't re-fire
+      this.towerLostTimes.delete(tower.target);
+      tower.isMoving = true;
+      tower.lastMovementTime = 0;
+      tower.homePosition = null;
+      tower.lastPosition = null;
+      tower.lastShotTime = 0;
+
+      this.setupTowerVisualsForTower(tower);
     });
   }
 
@@ -395,6 +481,9 @@ class TowerDefenseGame {
   private initializeTowersFromUpgrades() {
     const towerCountLevel = this.upgradeState["tower-count"] ?? 0;
     const maxTowers = 1 + towerCountLevel; // Level 0 = 1 tower, Level 1 = 2 towers, Level 2 = 3 towers, etc.
+
+    const existingByTarget = new Map<any, TowerInstance>();
+    this.towers.forEach((t) => existingByTarget.set(t.target, t));
 
     // Collect all tower targets by class (regardless of mindar-image-target state)
     const allTowerElements = Array.from(
@@ -433,23 +522,39 @@ class TowerDefenseGame {
     // Only keep the towers we have unlocked for gameplay
     const activeTowers = allTowerElements.slice(0, maxTowers);
 
-    this.towers = activeTowers.map((targetEl) => ({
-      target: targetEl,
-      sphere: null,
-      circle: null,
-      movingText: null,
-      homePosition: null,
-      lastPosition: null,
-      isMoving: false,
-      lastMovementTime: 0,
-      lastShotTime: 0,
-      fireRateMs: this.towerFireRateMs,
-      range: this.towerRange,
-    }));
+    this.towers = activeTowers.map((targetEl) => {
+      const existing = existingByTarget.get(targetEl);
+      if (existing) {
+        // Reset per-run state but keep object identity so previously-registered listeners still work.
+        existing.sphere = null;
+        existing.circle = null;
+        existing.movingText = null;
+        existing.buildRing = null;
+        existing.homePosition = null;
+        existing.lastPosition = null;
+        existing.isMoving = false;
+        existing.lastMovementTime = 0;
+        existing.lastShotTime = 0;
+        existing.fireRateMs = this.towerFireRateMs;
+        existing.range = this.towerRange;
+        return existing;
+      }
 
-    console.log(
-      `Initialized ${this.towers.length} tower(s) from upgrade level ${towerCountLevel}`,
-    );
+      return {
+        target: targetEl,
+        sphere: null,
+        circle: null,
+        movingText: null,
+        buildRing: null,
+        homePosition: null,
+        lastPosition: null,
+        isMoving: false,
+        lastMovementTime: 0,
+        lastShotTime: 0,
+        fireRateMs: this.towerFireRateMs,
+        range: this.towerRange,
+      };
+    });
   }
 
   private reinitializeTowersAfterUpgrades() {
@@ -462,6 +567,13 @@ class TowerDefenseGame {
         } catch {}
         tower.movingText = null;
       }
+
+      if (tower.buildRing) {
+        try {
+          tower.target.removeChild(tower.buildRing);
+        } catch {}
+        tower.buildRing = null;
+      }
     });
 
     // Recompute upgraded stats before reinitializing
@@ -470,19 +582,8 @@ class TowerDefenseGame {
     // Re-initialize towers based on new upgrade level
     this.initializeTowersFromUpgrades();
 
-    // Re-register events for new towers
-    this.towers.forEach((tower) => {
-      tower.target.addEventListener("targetFound", () => {
-        this.setupTowerVisualsForTower(tower);
-        if (tower.isMoving) {
-          this.setTowerActiveForTower(tower, false);
-        }
-        tower.homePosition = null;
-      });
-      tower.target.addEventListener("targetLost", () => {
-        this.handleTowerLostForTower(tower);
-      });
-    });
+    // Register (idempotent) tower events for the refreshed tower list
+    this.registerTowerEventListeners();
   }
 
   private resumeWave() {
@@ -509,24 +610,14 @@ class TowerDefenseGame {
         this.spawnInterval = null;
         this.waveActive = false;
         this.pausedWaveConfig = null;
-        console.log(
-          `Wave ${this.currentWave} complete (${waveConfig.count} enemies spawned). Break for ${this.waveBreakDuration}ms...`,
-        );
-
         if (this.currentWave < this.totalWaves) {
           setTimeout(() => {
             this.currentWave++;
             this.startWave();
           }, this.waveBreakDuration);
-        } else {
-          console.log("All waves completed!");
         }
       }
     }, spawnInterval);
-
-    console.log(
-      `Wave ${this.currentWave} resumed (${this.enemiesSpawnedInWave}/${waveConfig.count} spawned)`,
-    );
   }
 
   private startWave() {
@@ -539,32 +630,26 @@ class TowerDefenseGame {
     this.enemiesSpawnedInWave = 0;
     this.wavePaused = false;
     this.pausedWaveCompleted = false;
-    this.pausedWaveConfig = waveConfig; // Save for potential pause/resume
-    this.spawnCenterAngle = Math.random() * Math.PI * 2; // pick a new direction for this wave
-
-    console.log(
-      `Wave ${this.currentWave} started: ${waveConfig.count} enemies`,
-    );
+    this.pausedWaveConfig = waveConfig;
+    this.spawnCenterAngle = Math.random() * Math.PI * 2;
 
     if (this.spawnInterval) {
       clearInterval(this.spawnInterval);
     }
 
-    // Calculate spawn interval for this wave - spread spawns evenly across wave duration
     const spawnIntervalMs = Math.max(
       this.MIN_SPAWN_TIME,
       Math.round(waveConfig.duration / waveConfig.count),
     );
 
-    // Delay wave display update to let first enemies appear in frame
     setTimeout(() => {
       this.updateWaveDisplay();
+      this.showWaveStartIndicator();
     }, 2000 / waveConfig.baseSpeed);
 
     let waveCompleted = false;
 
     this.spawnInterval = window.setInterval(() => {
-      // If wave was paused, stop the interval and let resumeWave take over
       if (this.wavePaused) {
         clearInterval(this.spawnInterval!);
         this.spawnInterval = null;
@@ -579,23 +664,17 @@ class TowerDefenseGame {
       if (this.enemiesSpawnedInWave < waveConfig.count) {
         this.spawnEnemy();
       } else if (!waveCompleted) {
-        // Wave complete, mark it and start break before next wave
         waveCompleted = true;
         clearInterval(this.spawnInterval!);
         this.spawnInterval = null;
         this.waveActive = false;
         this.pausedWaveConfig = null;
-        console.log(
-          `Wave ${this.currentWave} complete (${waveConfig.count} enemies spawned). Break for ${this.waveBreakDuration}ms...`,
-        );
 
         if (this.currentWave < this.totalWaves) {
           setTimeout(() => {
             this.currentWave++;
             this.startWave();
           }, this.waveBreakDuration);
-        } else {
-          console.log("All waves completed!");
         }
       }
     }, spawnIntervalMs);
@@ -608,21 +687,15 @@ class TowerDefenseGame {
     }
 
     if (resetProgress) {
-      // reset progression so next game/session starts fresh
       this.spawnCount = 0;
       this.currentWave = 0;
       this.waveActive = false;
       this.wavePaused = false;
       this.enemiesSpawnedInWave = 0;
       this.pausedWaveConfig = null;
-      console.log("Enemy spawning stopped and reset");
     } else {
-      // pause the current wave without resetting progress
       this.waveActive = false;
       this.wavePaused = true;
-      console.log(
-        `Wave ${this.currentWave} paused (${this.enemiesSpawnedInWave} enemies spawned so far)`,
-      );
     }
   }
 
@@ -632,7 +705,6 @@ class TowerDefenseGame {
     }
 
     if (!this.isBaseVisible()) {
-      console.log("Base not visible, skipping enemy spawn");
       return;
     }
     const enemyId = `enemy-${this.enemyIdCounter++}`;
@@ -644,7 +716,7 @@ class TowerDefenseGame {
     enemyEntity.setAttribute("roughness", "1");
 
     const waveConfig = this.waveConfig[this.currentWave - 1];
-    const spreadRadians = (waveConfig.spreadAngle * Math.PI) / 180; // Convert degrees to radians
+    const spreadRadians = (waveConfig.spreadAngle * Math.PI) / 180;
     const angle = this.computeSpawnAngle(spreadRadians);
     const spawnX = Math.cos(angle) * this.SPAWN_DISTANCE;
     const spawnY = Math.sin(angle) * this.SPAWN_DISTANCE;
@@ -669,23 +741,12 @@ class TowerDefenseGame {
     this.enemies.set(enemyId, enemy);
     this.spawnCount++;
     this.enemiesSpawnedInWave++;
-
-    console.log(
-      `Spawned enemy ${enemyId} at position (${spawnX.toFixed(
-        2,
-      )}, ${spawnY.toFixed(2)}, 0) speed=${enemySpeed.toFixed(2)} spreadAngle=${
-        waveConfig.spreadAngle
-      }°`,
-    );
   }
 
   private computeSpawnAngle(spread: number) {
-    // early on, spawn within a narrow cone around spawnCenterAngle
-    // when spread >= 2pi this becomes uniform
     if (spread >= Math.PI * 2 - 0.001) {
       return Math.random() * Math.PI * 2;
     }
-    // choose angle around center with uniform distribution in [center - spread/2, center + spread/2]
     const offset = (Math.random() - 0.5) * spread;
     return this.spawnCenterAngle + offset;
   }
@@ -775,9 +836,6 @@ class TowerDefenseGame {
       if (distance < 0.2) {
         this.takeDamage(10); // Enemy deals 10 damage
         this.destroyEnemy(enemyId);
-        console.log(
-          `Enemy ${enemyId} reached the base! Health: ${this.health}`,
-        );
         return;
       }
 
@@ -944,12 +1002,6 @@ class TowerDefenseGame {
       return;
     }
 
-    console.log(
-      `Tower at (${towerPos.x.toFixed(2)}, ${towerPos.y.toFixed(
-        2,
-      )}) shooting enemy at (${enemyPos.x.toFixed(2)}, ${enemyPos.y.toFixed(2)})`,
-    );
-
     const lineEntity = document.createElement("a-entity");
 
     const distance = Math.sqrt(
@@ -1000,7 +1052,7 @@ class TowerDefenseGame {
       const rangeFactor = this.towerRange / this.TOWER_BASE_RANGE;
       const radius = this.TOWER_BASE_RADIUS * rangeFactor;
       tower.circle.setAttribute("radius", radius.toString());
-      tower.circle.setAttribute("opacity", "0.1");
+      tower.circle.setAttribute("opacity", "0.2");
       tower.circle.setAttribute("visible", "true");
       if (tower.isMoving) {
         tower.circle.setAttribute("color", "#000000");
@@ -1012,16 +1064,22 @@ class TowerDefenseGame {
   }
 
   private handleTowerLostForTower(tower: TowerInstance) {
-    // Remove any existing moving text before losing references
     if (tower.movingText && tower.target) {
       try {
         tower.target.removeChild(tower.movingText);
-      } catch (e) {
-        console.log("Could not remove moving text (target already lost)");
+      } catch {
+        // ignore
       }
     }
 
-    // Set to moving state so it will need to re-establish stability when reconnected
+    if (tower.buildRing && tower.target) {
+      try {
+        tower.target.removeChild(tower.buildRing);
+      } catch {
+        // ignore
+      }
+    }
+
     tower.isMoving = true;
     this.resetTowerStateForTower(tower);
   }
@@ -1030,6 +1088,7 @@ class TowerDefenseGame {
     tower.sphere = null;
     tower.circle = null;
     tower.movingText = null;
+    tower.buildRing = null;
     tower.homePosition = null;
     tower.lastPosition = null;
     tower.lastMovementTime = Date.now(); // Set current time for stability checking
@@ -1127,12 +1186,14 @@ class TowerDefenseGame {
 
   private updateMovingText(percentageRemaining: string) {
     this.towers.forEach((tower) => {
-      if (tower.movingText) {
-        tower.movingText.setAttribute(
-          "value",
-          `BUILDING... (${percentageRemaining})`,
-        );
-      }
+      if (!tower.buildRing) return;
+
+      const pct = parseInt(percentageRemaining.replace(/[^0-9]/g, ""), 10);
+      const clamped = Number.isFinite(pct)
+        ? Math.max(0, Math.min(100, pct))
+        : 0;
+      const thetaLength = (clamped / 100) * 360;
+      tower.buildRing.setAttribute("theta-length", thetaLength);
     });
   }
 
@@ -1162,6 +1223,13 @@ class TowerDefenseGame {
         tower.target.removeChild(tower.movingText);
         tower.movingText = null;
       }
+
+      if (tower.buildRing) {
+        try {
+          tower.target.removeChild(tower.buildRing);
+        } catch {}
+        tower.buildRing = null;
+      }
     } else {
       // Deactivate tower
       if (tower.sphere) {
@@ -1173,13 +1241,19 @@ class TowerDefenseGame {
         tower.circle.setAttribute("color", "#330066");
       }
 
-      if (!tower.movingText) {
-        tower.movingText = document.createElement("a-text");
-        tower.movingText.setAttribute("position", "0 0 0.15");
-        tower.movingText.setAttribute("align", "center");
-        tower.movingText.setAttribute("color", "white");
-        tower.movingText.setAttribute("scale", "0.5 0.5 0.5");
-        tower.target.appendChild(tower.movingText);
+      // Show a closing progress ring instead of BUILDING... text
+      if (!tower.buildRing) {
+        tower.buildRing = document.createElement("a-ring");
+        tower.buildRing.setAttribute("position", "0 0 0.16");
+        tower.buildRing.setAttribute("radius-inner", "0.14");
+        tower.buildRing.setAttribute("radius-outer", "0.20");
+        tower.buildRing.setAttribute("theta-start", "90");
+        tower.buildRing.setAttribute("theta-length", "0");
+        tower.buildRing.setAttribute(
+          "material",
+          "color: #6600FF; opacity: 0.8; transparent: true; side: double",
+        );
+        tower.target.appendChild(tower.buildRing);
       }
     }
   }
@@ -1271,6 +1345,37 @@ class TowerDefenseGame {
     }
   }
 
+  private showWaveStartIndicator() {
+    if (!this.waveStartIndicator) return;
+    if (this.currentWave <= 0) return;
+
+    if (this.waveStartIndicatorTimeout !== null) {
+      window.clearTimeout(this.waveStartIndicatorTimeout);
+      this.waveStartIndicatorTimeout = null;
+    }
+
+    this.waveStartIndicator.textContent = `Wave ${this.currentWave}`;
+    this.waveStartIndicator.style.display = "block";
+
+    // Trigger transition
+    requestAnimationFrame(() => {
+      this.waveStartIndicator?.classList.add("show");
+    });
+
+    this.waveStartIndicatorTimeout = window.setTimeout(() => {
+      if (!this.waveStartIndicator) return;
+      this.waveStartIndicator.classList.remove("show");
+
+      // Allow fade-out to complete before hiding
+      window.setTimeout(() => {
+        if (!this.waveStartIndicator) return;
+        if (!this.waveStartIndicator.classList.contains("show")) {
+          this.waveStartIndicator.style.display = "none";
+        }
+      }, 180);
+    }, 1200);
+  }
+
   private checkWinCondition() {
     if (this.gameWon) return;
 
@@ -1351,10 +1456,8 @@ class TowerDefenseGame {
     // Stop any ongoing spawning and reset progression
     this.stopEnemySpawning(true);
 
-    // Reset health and points
+    // Reset health (keep points/energy across restarts so upgrades persist)
     this.health = this.defaultBaseHealth;
-    this.points = 0;
-    this.savePoints();
     this.gameOver = false;
     this.gameWon = false;
 
@@ -1391,12 +1494,14 @@ class TowerDefenseGame {
     // Reset towers state and reinitialize based on upgrades
     this.reinitializeTowersAfterUpgrades();
 
+    // If a tower marker stayed tracked while the upgrade screen was open, MindAR won't re-fire targetFound.
+    // Force tracked towers back into BUILDING state so restart feels consistent.
+    this.forceTrackedTowersIntoBuildingState();
+
     // If the base is currently tracked, start spawning immediately so user doesn't need to recapture
     if (this.baseTarget?.object3D?.visible) {
       this.startEnemySpawning();
     }
-
-    console.log("Game restarted!");
   }
 
   private resetAllProgress() {
@@ -1635,10 +1740,6 @@ class TowerDefenseGame {
     if (upgradeId === "tower-count") {
       this.reinitializeTowersAfterUpgrades();
     }
-
-    console.log(
-      `Purchased ${upgradeId} to level ${this.upgradeState[upgradeId]}`,
-    );
   }
 
   public cleanup() {
