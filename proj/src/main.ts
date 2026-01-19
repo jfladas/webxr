@@ -26,7 +26,12 @@ interface TowerInstance {
   range: number;
 }
 
-type UpgradeId = "tower-count" | "range" | "base-health" | "fire-rate";
+type UpgradeId =
+  | "tower-count"
+  | "range"
+  | "base-health"
+  | "fire-rate"
+  | "wave-skip";
 
 interface UpgradeLevel<T = number> {
   value: T;
@@ -195,6 +200,19 @@ class TowerDefenseGame {
         { value: 500, cost: 50 },
       ],
       format: (v) => `${v}`,
+    },
+    {
+      id: "wave-skip",
+      name: "Wave Skip",
+      desc: "Start new runs on a later wave",
+      levels: [
+        { value: 1, cost: 0 },
+        { value: 2, cost: 25 },
+        { value: 3, cost: 50 },
+        { value: 4, cost: 75 },
+        { value: 5, cost: 100 },
+      ],
+      format: (v) => `Wave ${v}`,
     },
   ];
   private upgradeState: UpgradeState = {};
@@ -473,9 +491,15 @@ class TowerDefenseGame {
       this.resumeWave();
     } else if (this.currentWave === 0) {
       // Start a new game
-      this.currentWave = 1;
+      this.currentWave = this.getStartingWaveForNewGame();
       this.startWave();
     }
+  }
+
+  private getStartingWaveForNewGame(): number {
+    const desired = Math.round(this.getUpgradeCurrentValueById("wave-skip"));
+    const clamped = Math.max(1, Math.min(this.totalWaves, desired));
+    return clamped;
   }
 
   private initializeTowersFromUpgrades() {
