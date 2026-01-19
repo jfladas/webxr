@@ -110,15 +110,15 @@ class TowerDefenseGame {
   private pausedWaveCompleted = false; // track if we've completed spawning during pause
   private waveConfig = [
     { count: 5, baseSpeed: 0.3, spreadAngle: 10, duration: 5000 },
-    { count: 7, baseSpeed: 0.4, spreadAngle: 30, duration: 8000 },
-    { count: 10, baseSpeed: 0.5, spreadAngle: 60, duration: 8000 },
-    { count: 15, baseSpeed: 0.65, spreadAngle: 90, duration: 8000 },
-    { count: 20, baseSpeed: 0.8, spreadAngle: 120, duration: 8000 },
-    { count: 25, baseSpeed: 1, spreadAngle: 180, duration: 9000 },
-    { count: 40, baseSpeed: 1.2, spreadAngle: 240, duration: 10000 },
-    { count: 50, baseSpeed: 1.5, spreadAngle: 300, duration: 10000 },
-    { count: 70, baseSpeed: 2, spreadAngle: 330, duration: 12000 },
-    { count: 100, baseSpeed: 3, spreadAngle: 360, duration: 15000 },
+    { count: 10, baseSpeed: 0.5, spreadAngle: 30, duration: 8000 },
+    { count: 15, baseSpeed: 0.75, spreadAngle: 60, duration: 10000 },
+    { count: 20, baseSpeed: 1, spreadAngle: 90, duration: 10000 },
+    { count: 30, baseSpeed: 1.2, spreadAngle: 120, duration: 10000 },
+    { count: 50, baseSpeed: 1.5, spreadAngle: 180, duration: 12000 },
+    { count: 70, baseSpeed: 2, spreadAngle: 240, duration: 12000 },
+    { count: 100, baseSpeed: 2.5, spreadAngle: 300, duration: 15000 },
+    { count: 200, baseSpeed: 3, spreadAngle: 330, duration: 20000 },
+    { count: 500, baseSpeed: 4, spreadAngle: 360, duration: 30000 },
   ];
 
   // Upgrades configuration and state
@@ -131,8 +131,8 @@ class TowerDefenseGame {
       desc: "Add an additional tower",
       levels: [
         { value: 1, cost: 0 },
-        { value: 2, cost: 20 },
-        { value: 3, cost: 50 },
+        { value: 2, cost: 50 },
+        { value: 3, cost: 100 },
       ],
       format: (v) => `${v}`,
     },
@@ -142,9 +142,13 @@ class TowerDefenseGame {
       desc: "Increase tower attack range",
       levels: [
         { value: 1.0, cost: 0 },
-        { value: 1.2, cost: 8 },
-        { value: 1.5, cost: 12 },
-        { value: 2.0, cost: 20 },
+        { value: 1.1, cost: 10 },
+        { value: 1.2, cost: 12 },
+        { value: 1.4, cost: 18 },
+        { value: 1.7, cost: 25 },
+        { value: 2.0, cost: 40 },
+        { value: 2.5, cost: 80 },
+        { value: 3.0, cost: 100 },
       ],
       format: (v) => `x${v.toFixed(1)}`,
     },
@@ -154,11 +158,16 @@ class TowerDefenseGame {
       desc: "Reduce shooting cooldown",
       levels: [
         { value: 2000, cost: 0 },
-        { value: 1700, cost: 5 },
-        { value: 1200, cost: 10 },
-        { value: 900, cost: 15 },
-        { value: 500, cost: 25 },
-        { value: 300, cost: 40 },
+        { value: 1800, cost: 5 },
+        { value: 1600, cost: 10 },
+        { value: 1400, cost: 20 },
+        { value: 1200, cost: 30 },
+        { value: 1000, cost: 40 },
+        { value: 800, cost: 50 },
+        { value: 500, cost: 70 },
+        { value: 300, cost: 80 },
+        { value: 200, cost: 90 },
+        { value: 100, cost: 100 },
       ],
       format: (v) => `${Math.round(v)}ms`,
     },
@@ -169,8 +178,9 @@ class TowerDefenseGame {
       levels: [
         { value: 100, cost: 0 },
         { value: 150, cost: 10 },
-        { value: 200, cost: 15 },
-        { value: 300, cost: 20 },
+        { value: 200, cost: 20 },
+        { value: 300, cost: 30 },
+        { value: 500, cost: 50 },
       ],
       format: (v) => `${v}`,
     },
@@ -268,7 +278,7 @@ class TowerDefenseGame {
     // Detect if device is mobile or desktop
     const isMobile =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent
+        navigator.userAgent,
       );
 
     const popup = document.getElementById("desktop-popup");
@@ -300,10 +310,10 @@ class TowerDefenseGame {
 
   private setupGame() {
     this.baseTarget = document.querySelector(
-      '[mindar-image-target="targetIndex: 0"]'
+      '[mindar-image-target="targetIndex: 0"]',
     );
     this.towerTarget = document.querySelector(
-      '[mindar-image-target="targetIndex: 1"]'
+      '[mindar-image-target="targetIndex: 1"]',
     );
 
     if (!this.baseTarget || !this.towerTarget) {
@@ -337,10 +347,10 @@ class TowerDefenseGame {
   private registerTowerEventListeners() {
     this.towers.forEach((tower) => {
       tower.target.addEventListener("targetFound", () => {
+        // Force into moving state on first appearance to ensure proper initialization
+        tower.isMoving = true;
+        tower.lastMovementTime = 0;
         this.setupTowerVisualsForTower(tower);
-        if (tower.isMoving) {
-          this.setTowerActiveForTower(tower, false);
-        }
         tower.homePosition = null;
       });
       tower.target.addEventListener("targetLost", () => {
@@ -372,7 +382,7 @@ class TowerDefenseGame {
 
     // Collect all tower targets by class (regardless of mindar-image-target state)
     const allTowerElements = Array.from(
-      document.querySelectorAll("a-entity.tower")
+      document.querySelectorAll("a-entity.tower"),
     );
 
     // Show/hide tower elements based on unlock level
@@ -422,7 +432,7 @@ class TowerDefenseGame {
     }));
 
     console.log(
-      `Initialized ${this.towers.length} tower(s) from upgrade level ${towerCountLevel}`
+      `Initialized ${this.towers.length} tower(s) from upgrade level ${towerCountLevel}`,
     );
   }
 
@@ -465,7 +475,7 @@ class TowerDefenseGame {
     const waveConfig = this.pausedWaveConfig;
     const spawnInterval = Math.max(
       this.MIN_SPAWN_TIME,
-      Math.round(waveConfig.duration / waveConfig.count)
+      Math.round(waveConfig.duration / waveConfig.count),
     );
 
     const waveCompleted = this.pausedWaveCompleted;
@@ -484,7 +494,7 @@ class TowerDefenseGame {
         this.waveActive = false;
         this.pausedWaveConfig = null;
         console.log(
-          `Wave ${this.currentWave} complete (${waveConfig.count} enemies spawned). Break for ${this.waveBreakDuration}ms...`
+          `Wave ${this.currentWave} complete (${waveConfig.count} enemies spawned). Break for ${this.waveBreakDuration}ms...`,
         );
 
         if (this.currentWave < this.totalWaves) {
@@ -499,7 +509,7 @@ class TowerDefenseGame {
     }, spawnInterval);
 
     console.log(
-      `Wave ${this.currentWave} resumed (${this.enemiesSpawnedInWave}/${waveConfig.count} spawned)`
+      `Wave ${this.currentWave} resumed (${this.enemiesSpawnedInWave}/${waveConfig.count} spawned)`,
     );
   }
 
@@ -517,7 +527,7 @@ class TowerDefenseGame {
     this.spawnCenterAngle = Math.random() * Math.PI * 2; // pick a new direction for this wave
 
     console.log(
-      `Wave ${this.currentWave} started: ${waveConfig.count} enemies`
+      `Wave ${this.currentWave} started: ${waveConfig.count} enemies`,
     );
 
     if (this.spawnInterval) {
@@ -527,7 +537,7 @@ class TowerDefenseGame {
     // Calculate spawn interval for this wave - spread spawns evenly across wave duration
     const spawnIntervalMs = Math.max(
       this.MIN_SPAWN_TIME,
-      Math.round(waveConfig.duration / waveConfig.count)
+      Math.round(waveConfig.duration / waveConfig.count),
     );
 
     // Delay wave display update to let first enemies appear in frame
@@ -560,7 +570,7 @@ class TowerDefenseGame {
         this.waveActive = false;
         this.pausedWaveConfig = null;
         console.log(
-          `Wave ${this.currentWave} complete (${waveConfig.count} enemies spawned). Break for ${this.waveBreakDuration}ms...`
+          `Wave ${this.currentWave} complete (${waveConfig.count} enemies spawned). Break for ${this.waveBreakDuration}ms...`,
         );
 
         if (this.currentWave < this.totalWaves) {
@@ -595,7 +605,7 @@ class TowerDefenseGame {
       this.waveActive = false;
       this.wavePaused = true;
       console.log(
-        `Wave ${this.currentWave} paused (${this.enemiesSpawnedInWave} enemies spawned so far)`
+        `Wave ${this.currentWave} paused (${this.enemiesSpawnedInWave} enemies spawned so far)`,
       );
     }
   }
@@ -625,7 +635,7 @@ class TowerDefenseGame {
 
     enemyEntity.setAttribute(
       "position",
-      `${spawnX} ${spawnY} ${this.GAME_Z_PLANE}`
+      `${spawnX} ${spawnY} ${this.GAME_Z_PLANE}`,
     );
 
     this.baseTarget.appendChild(enemyEntity);
@@ -646,10 +656,10 @@ class TowerDefenseGame {
 
     console.log(
       `Spawned enemy ${enemyId} at position (${spawnX.toFixed(
-        2
+        2,
       )}, ${spawnY.toFixed(2)}, 0) speed=${enemySpeed.toFixed(2)} spreadAngle=${
         waveConfig.spreadAngle
-      }°`
+      }°`,
     );
   }
 
@@ -752,7 +762,7 @@ class TowerDefenseGame {
         this.takeDamage(10); // Enemy deals 10 damage
         this.destroyEnemy(enemyId);
         console.log(
-          `Enemy ${enemyId} reached the base! Health: ${this.health}`
+          `Enemy ${enemyId} reached the base! Health: ${this.health}`,
         );
         return;
       }
@@ -770,7 +780,7 @@ class TowerDefenseGame {
 
       enemy.entity.setAttribute(
         "position",
-        `${newPosition.x} ${newPosition.y} ${newPosition.z}`
+        `${newPosition.x} ${newPosition.y} ${newPosition.z}`,
       );
     });
 
@@ -801,7 +811,7 @@ class TowerDefenseGame {
     }
 
     const worldPosition = marker.object3D.getWorldPosition(
-      new (window as any).THREE.Vector3()
+      new (window as any).THREE.Vector3(),
     );
 
     return {
@@ -835,7 +845,7 @@ class TowerDefenseGame {
       if (enemyWorldPosition) {
         const distance = this.calculateDistance2D(
           towerWorldPosition,
-          enemyWorldPosition
+          enemyWorldPosition,
         );
 
         if (distance <= tower.range && distance < closestDistance) {
@@ -862,7 +872,7 @@ class TowerDefenseGame {
     }
 
     const worldPosition = enemy.entity.object3D.getWorldPosition(
-      new (window as any).THREE.Vector3()
+      new (window as any).THREE.Vector3(),
     );
 
     // Return only X,Y since everything is on the same Z-plane
@@ -890,7 +900,7 @@ class TowerDefenseGame {
     const lineEntity = document.createElement("a-entity");
 
     const distance = Math.sqrt(
-      (enemyPos.x - towerPos.x) ** 2 + (enemyPos.y - towerPos.y) ** 2
+      (enemyPos.x - towerPos.x) ** 2 + (enemyPos.y - towerPos.y) ** 2,
     );
     const angle = Math.atan2(enemyPos.y - towerPos.y, enemyPos.x - towerPos.x);
 
@@ -902,13 +912,13 @@ class TowerDefenseGame {
 
     lineEntity.setAttribute(
       "geometry",
-      `primitive: cylinder; radius: 0.005; height: ${distance}`
+      `primitive: cylinder; radius: 0.005; height: ${distance}`,
     );
     lineEntity.setAttribute("material", "color: #F8349B; opacity: 0.5");
 
     lineEntity.setAttribute(
       "position",
-      `${midpoint.x} ${midpoint.y} ${midpoint.z}`
+      `${midpoint.x} ${midpoint.y} ${midpoint.z}`,
     );
     lineEntity.setAttribute("rotation", `0 0 ${(angle * 180) / Math.PI - 90}`);
 
@@ -924,7 +934,7 @@ class TowerDefenseGame {
   private setupTowerVisualsForTower(tower: TowerInstance) {
     if (!tower.target) return;
 
-    // Store references to existing tower elements (support sphere, box, cone, or tetrahedron body)
+    // Store references to existing tower elements immediately
     tower.sphere =
       tower.target.querySelector("a-sphere") ||
       tower.target.querySelector("a-box") ||
@@ -932,15 +942,8 @@ class TowerDefenseGame {
       tower.target.querySelector("a-tetrahedron");
     tower.circle = tower.target.querySelector("a-circle");
 
-    // Reset tower to active state
-    this.setTowerActiveForTower(tower, true);
-
-    // Scale range circle based on current range factor
-    const rangeFactor = this.towerRange / this.TOWER_BASE_RANGE;
-    const radius = this.TOWER_BASE_RADIUS * rangeFactor;
-    if (tower.circle) {
-      tower.circle.setAttribute("radius", radius);
-    }
+    // Deactivate tower body (hide sphere, show "BUILDING..." text)
+    this.setTowerActiveForTower(tower, false);
   }
 
   private handleTowerLostForTower(tower: TowerInstance) {
@@ -985,7 +988,7 @@ class TowerDefenseGame {
     // Check for movement from home position (triggers moving state)
     const distanceFromHome = this.calculateDistance2D(
       tower.homePosition,
-      currentPosition
+      currentPosition,
     );
 
     // Check for recent movement (frame to frame)
@@ -993,17 +996,33 @@ class TowerDefenseGame {
     if (tower.lastPosition) {
       recentMovement = this.calculateDistance2D(
         tower.lastPosition,
-        currentPosition
+        currentPosition,
       );
     }
 
     if (distanceFromHome > this.MOVEMENT_THRESHOLD && !tower.isMoving) {
       tower.isMoving = true;
       this.setTowerActiveForTower(tower, false);
+      // Override circle to black while moving
+      if (tower.circle) {
+        tower.circle.setAttribute("color", "#000000");
+      }
       tower.lastMovementTime = 0;
     }
 
     if (tower.isMoving) {
+      // Keep circle black and update radius while moving
+      if (!tower.circle) {
+        tower.circle = tower.target.querySelector("a-circle");
+      }
+      if (tower.circle) {
+        tower.circle.setAttribute("color", "#000000");
+        // Update radius based on current range
+        const rangeFactor = this.towerRange / this.TOWER_BASE_RANGE;
+        const radius = this.TOWER_BASE_RADIUS * rangeFactor;
+        tower.circle.setAttribute("radius", radius.toString());
+      }
+
       if (recentMovement <= 0.1) {
         if (tower.lastMovementTime === 0) {
           tower.lastMovementTime = currentTime;
@@ -1017,11 +1036,14 @@ class TowerDefenseGame {
         if (timeSinceStabilizationStarted >= this.STABILITY_TIME) {
           tower.homePosition = { ...currentPosition };
           tower.isMoving = false;
+          if (tower.circle) {
+            tower.circle.setAttribute("color", "#6600FF");
+          }
           this.setTowerActiveForTower(tower, true);
           tower.lastMovementTime = 0;
         } else {
           this.updateMovingText(
-            Math.ceil(100 - (timeRemaining / this.STABILITY_TIME) * 100) + "%"
+            Math.ceil(100 - (timeRemaining / this.STABILITY_TIME) * 100) + "%",
           );
         }
       } else {
@@ -1039,7 +1061,7 @@ class TowerDefenseGame {
       if (tower.movingText) {
         tower.movingText.setAttribute(
           "value",
-          `BUILDING... (${percentageRemaining})`
+          `BUILDING... (${percentageRemaining})`,
         );
       }
     });
@@ -1063,7 +1085,8 @@ class TowerDefenseGame {
         tower.sphere.setAttribute("visible", "true");
         tower.sphere.setAttribute("opacity", "1");
       }
-      if (tower.circle) {
+      // Only update circle color if not moving (keep black while moving)
+      if (tower.circle && !tower.isMoving) {
         tower.circle.setAttribute("color", "#6600FF");
       }
       if (tower.movingText) {
@@ -1076,7 +1099,8 @@ class TowerDefenseGame {
         tower.sphere.setAttribute("visible", "false");
         tower.sphere.setAttribute("opacity", "0");
       }
-      if (tower.circle) {
+      // Only update circle color if not moving (keep black while moving)
+      if (tower.circle && !tower.isMoving) {
         tower.circle.setAttribute("color", "#330066");
       }
 
@@ -1102,12 +1126,12 @@ class TowerDefenseGame {
     }
     // Get the tower's world position
     const towerWorldPos = tower.target.object3D.getWorldPosition(
-      new (window as any).THREE.Vector3()
+      new (window as any).THREE.Vector3(),
     );
 
     // Convert tower world position to base target's local coordinates
     const towerPos = this.baseTarget.object3D.worldToLocal(
-      towerWorldPos.clone()
+      towerWorldPos.clone(),
     );
 
     const relativePos = {
@@ -1338,7 +1362,7 @@ class TowerDefenseGame {
             acc[def.id] = 0;
             return acc;
           },
-          {} as UpgradeState
+          {} as UpgradeState,
         );
         this.saveUpgradeState();
       }
@@ -1352,7 +1376,7 @@ class TowerDefenseGame {
     try {
       window.localStorage.setItem(
         this.UPGRADE_STORAGE_KEY,
-        JSON.stringify(this.upgradeState)
+        JSON.stringify(this.upgradeState),
       );
     } catch {}
   }
@@ -1384,7 +1408,7 @@ class TowerDefenseGame {
     try {
       window.localStorage.setItem(
         this.SHOP_VISITS_STORAGE_KEY,
-        this.shopVisits.toString()
+        this.shopVisits.toString(),
       );
     } catch {}
   }
@@ -1393,7 +1417,7 @@ class TowerDefenseGame {
     try {
       window.localStorage.setItem(
         this.POINTS_STORAGE_KEY,
-        this.points.toString()
+        this.points.toString(),
       );
     } catch {}
   }
@@ -1469,7 +1493,7 @@ class TowerDefenseGame {
 
       // Build progress bar with segments
       let progressBarHTML = '<div class=\"upgrade-progress\">';
-      for (let i = 0; i + 1 < totalLevels; i++) {
+      for (let i = 1; i < totalLevels; i++) {
         const filled = i <= currentLevel ? "filled" : "";
         progressBarHTML += `<div class=\"progress-segment ${filled}\"></div>`;
       }
@@ -1544,7 +1568,7 @@ class TowerDefenseGame {
     }
 
     console.log(
-      `Purchased ${upgradeId} to level ${this.upgradeState[upgradeId]}`
+      `Purchased ${upgradeId} to level ${this.upgradeState[upgradeId]}`,
     );
   }
 
