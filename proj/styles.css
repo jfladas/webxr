@@ -331,7 +331,6 @@
 
 .upgrade-item.maxed {
     background: rgba(248, 52, 155, 0.15);
-    box-shadow: 0 0 0 1px rgba(248, 52, 155, 0.55) inset;
 }
 
 .upgrade-item.maxed .upgrade-cost {
