@@ -68,10 +68,6 @@
     pointer-events: all;
 }
 
-.help-btn:active {
-    transform: scale(0.95);
-}
-
 #wave-value {
     color: #FFFFFF;
     font-weight: 600;
@@ -126,14 +122,48 @@
     align-items: center;
 }
 
-#points-display {
+#energy-display {
     display: flex;
     align-items: center;
 }
 
-#points-value {
+#energy-value {
     color: #FFFFFF;
     font-weight: 600;
+}
+
+.primary,
+.secondary {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    color: #FFFFFF;
+}
+
+.secondary {
+    padding: 12px 18px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.primary:hover,
+.secondary:hover,
+.close-btn:hover,
+.help-btn:hover,
+.upgrade-btn:hover {
+    transform: scale(1.05);
+}
+
+.primary:active,
+.secondary:active,
+.close-btn:active,
+.help-btn:active,
+.upgrade-btn:active {
+    transform: scale(0.98);
 }
 
 #blur {
@@ -186,7 +216,7 @@
     justify-content: center;
 }
 
-#upgrade-points {
+#upgrade-energy {
     color: #47DCFF;
     font-weight: 600;
     font-weight: bold;
@@ -262,27 +292,6 @@
     gap: 12px;
     justify-content: center;
     flex-wrap: wrap;
-}
-
-#win-actions button {
-    padding: 12px 18px;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    background-color: #47DCFF;
-    color: white;
-}
-
-#win-actions button.secondary {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-#win-actions button:active {
-    transform: scale(0.98);
 }
 
 .upgrade-item {
@@ -366,10 +375,6 @@
     transition: all 0.2s ease;
 }
 
-.upgrade-btn:active {
-    transform: scale(0.95);
-}
-
 .upgrade-btn:disabled {
     cursor: not-allowed;
     opacity: 0.3;
@@ -388,18 +393,7 @@
     background: #CCFF33;
     color: #000000;
     box-shadow: rgba(0, 0, 0, 0.7) 0px 0px 50px 50px;
-    border: none;
-    padding: 12px;
-    font-size: 16px;
-    border-radius: 5px;
-    width: 100%;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s ease;
-}
-
-#restart-btn:active {
-    transform: scale(0.95);
+    width: 200px;
 }
 
 /* Hide VR mode button */
@@ -464,12 +458,12 @@
 }
 
 #qr-container {
-    margin: 30px 0;
+    margin: 20px 0;
 }
 
 #qr-code {
-    width: 250px;
-    height: 250px;
+    max-width: 300px;
+    height: auto;
     border-radius: 8px;
     background: white;
     padding: 10px;
@@ -481,23 +475,8 @@
     gap: 8px;
     background: #6600ff;
     color: white;
-    padding: 15px 30px;
-    border-radius: 8px;
     text-decoration: none;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    margin-top: 20px;
     text-wrap: nowrap;
-}
-
-.download-btn:hover {
-    transform: scale(1.05);
-}
-
-.download-btn:active {
-    transform: scale(0.95);
 }
 
 .close-btn {
@@ -514,14 +493,6 @@
     align-items: center;
     justify-content: center;
     padding: 0;
-}
-
-.close-btn:hover {
-    transform: scale(1.2);
-}
-
-.close-btn:active {
-    transform: scale(0.9);
 }
 
 /* Help Popup Styles */
@@ -557,7 +528,9 @@
     background: rgba(0, 0, 0, 0.7);
     border-radius: 12px;
     padding: 40px;
-    width: min-content;
+    width: 60vw;
+    min-width: min-content;
+    max-width: 350px;
     max-height: 80vh;
     overflow-y: auto;
     text-align: left;
@@ -590,4 +563,22 @@
 
 .help-section strong {
     color: #47DCFF;
+}
+
+strong.blue {
+    color: #47DCFF;
+}
+
+strong.green {
+    color: #CCFF33;
+}
+
+strong.pink {
+    color: #F8349B;
+}
+
+.help-section.help-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }

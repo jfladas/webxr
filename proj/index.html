@@ -19,8 +19,8 @@
       <div id="wave-display">Wave <span id="wave-value">0</span>/10</div>
       <div id="health-display"><span class="material-symbols-rounded icon-heart">favorite</span><span
           id="health-value">100</span></div>
-      <div id="points-display"><span class="material-symbols-rounded icon-bolt">bolt</span><span
-          id="points-value">0</span></div>
+      <div id="energy-display"><span class="material-symbols-rounded icon-bolt">bolt</span><span
+          id="energy-value">0</span></div>
 
     </div>
     <button id="help-btn" class="help-btn"><span class="material-symbols-rounded">help</span></button>
@@ -28,11 +28,11 @@
     <div id="upgrade-screen" style="display: none;">
       <h2>Defeat!</h2>
       <div id="upgrade-stats">
-        <p><span class="material-symbols-rounded icon-bolt">bolt</span><span id="upgrade-points">0</span></p>
+        <p><span class="material-symbols-rounded icon-bolt">bolt</span><span id="upgrade-energy">0</span></p>
       </div>
       <div id="upgrade-list"></div>
       <div id="button-group">
-        <button id="restart-btn">Restart</button>
+        <button id="restart-btn" class="primary">Restart</button>
       </div>
     </div>
 
@@ -55,20 +55,38 @@
         <button id="close-help" class="close-btn"><span class="material-symbols-rounded">close</span></button>
         <h2>Game Info</h2>
         <div class="help-section">
-          <h3>About</h3>
-          <p>AR Tower Defense by jfladas <br>HSLU, WEBXR HS2025</p>
+          <h3>How to Play</h3>
+          <p>
+            Place the printed markers on a flat surface.
+            <br><strong class="green">Enemies</strong> will spawn and move towards the base. Towers will automatically
+            attack <strong class="green">enemies</strong> within range.
+            Defend your base by moving tower markers on your table and purchasing <strong class="pink">upgrades</strong>
+            using <strong class="blue">energy</strong> earned from
+            defeating <strong class="green">enemies</strong>.
+            <br>Can you survive all 10 waves?
+          </p>
         </div>
         <div class="help-section">
           <h3>Save Data</h3>
-          <p>Your <strong>points</strong> and <strong>upgrades</strong> are automatically saved. If any issues occur,
+          <p>Your <strong class="blue">energy</strong> and <strong class="pink">upgrades</strong> are automatically
+            saved. If any issues occur,
             simply reload the page and your progress will be restored.</p>
         </div>
         <div class="help-section">
           <h3>Markers</h3>
           <p>The game requires AR image markers to play. Download the PDF below, then print and cut them out to get
             started!</p>
-          <a href="/markers.pdf" download class="download-btn"><span
+        </div>
+        <div class="help-section help-action">
+          <a href="/markers.pdf" download class="download-btn primary"><span
               class="material-symbols-rounded">download</span>Download Markers</a>
+        </div>
+        <div class="help-section">
+          <h3>About</h3>
+          <p>AR Tower Defense by jfladas <br>HSLU, WEBXR HS2025</p>
+        </div>
+        <div class="help-section help-action">
+          <button id="help-reset-btn" class="secondary">Reset Progress</button>
         </div>
       </div>
     </div>
@@ -80,12 +98,13 @@
     <div id="desktop-popup-content">
       <button id="close-popup" class="close-btn"><span class="material-symbols-rounded">close</span></button>
       <h2>Mobile Game</h2>
-      <p>This game is optimized for mobile devices.</p>
+      <p>This game is optimized for mobile devices.<br>Scan the QR code to open on mobile</p>
       <div id="qr-container">
         <img src="/qr.png" alt="QR Code" id="qr-code" />
       </div>
-      <p class="popup-text">Scan the QR code to open on mobile</p>
-      <a href="/markers.pdf" download class="download-btn"><span
+      <p>Download AR image markers below, print and cut them out to get
+        started!</p>
+      <a href="/markers.pdf" download class="download-btn primary"><span
           class="material-symbols-rounded">download</span>Download Markers</a>
     </div>
   </div>
@@ -99,7 +118,7 @@
 
     <!-- Base (Target 0) - Silver Icosahedron -->
     <a-entity mindar-image-target="targetIndex: 0" scale="1 1 1">
-      <a-icosahedron position="0 0 0" radius="0.5" color="white" opacity="1" metalness="0.5" roughness="0.3"
+      <a-icosahedron position="0 0 0" radius="0.5" color="white" opacity="1"
         animation="property: rotation; to: 0 0 360; loop: true; dur: 10000; elasticity: 0; easing: linear"></a-icosahedron>
     </a-entity>
 

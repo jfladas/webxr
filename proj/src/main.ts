@@ -79,6 +79,9 @@ class TowerDefenseGame {
   // Tower state tracking (per-tower handled via towers[])
   private readonly MOVEMENT_THRESHOLD = 0.3;
   private readonly STABILITY_TIME = 2000;
+  private towerLostTimes: Map<any, number> = new Map(); // Track when each tower was last lost
+  private readonly TOWER_LOST_GRACE_PERIOD = 100; // ms to wait after targetLost before allowing attacks again
+  private towerTrackedTargets: WeakSet<any> = new WeakSet();
   // Upgradeable tower properties
   private readonly TOWER_BASE_RANGE = 700;
   private readonly TOWER_BASE_RADIUS = 0.7; // visual circle radius baseline
@@ -109,7 +112,7 @@ class TowerDefenseGame {
   private pausedWaveConfig: any = null; // store config during pause
   private pausedWaveCompleted = false; // track if we've completed spawning during pause
   private waveConfig = [
-    { count: 5, baseSpeed: 0.3, spreadAngle: 10, duration: 5000 },
+    { count: 5, baseSpeed: 0.5, spreadAngle: 10, duration: 6000 },
     { count: 10, baseSpeed: 0.5, spreadAngle: 30, duration: 8000 },
     { count: 15, baseSpeed: 0.75, spreadAngle: 60, duration: 10000 },
     { count: 20, baseSpeed: 1, spreadAngle: 90, duration: 10000 },
@@ -142,13 +145,12 @@ class TowerDefenseGame {
       desc: "Increase tower attack range",
       levels: [
         { value: 1.0, cost: 0 },
-        { value: 1.1, cost: 10 },
-        { value: 1.2, cost: 12 },
-        { value: 1.4, cost: 18 },
-        { value: 1.7, cost: 25 },
-        { value: 2.0, cost: 40 },
-        { value: 2.5, cost: 80 },
-        { value: 3.0, cost: 100 },
+        { value: 1.2, cost: 5 },
+        { value: 1.5, cost: 10 },
+        { value: 1.8, cost: 20 },
+        { value: 2.0, cost: 30 },
+        { value: 2.5, cost: 50 },
+        { value: 3.0, cost: 70 },
       ],
       format: (v) => `x${v.toFixed(1)}`,
     },
@@ -160,14 +162,14 @@ class TowerDefenseGame {
         { value: 2000, cost: 0 },
         { value: 1800, cost: 5 },
         { value: 1600, cost: 10 },
-        { value: 1400, cost: 20 },
-        { value: 1200, cost: 30 },
-        { value: 1000, cost: 40 },
-        { value: 800, cost: 50 },
-        { value: 500, cost: 70 },
-        { value: 300, cost: 80 },
-        { value: 200, cost: 90 },
-        { value: 100, cost: 100 },
+        { value: 1400, cost: 15 },
+        { value: 1200, cost: 20 },
+        { value: 1000, cost: 35 },
+        { value: 800, cost: 40 },
+        { value: 500, cost: 50 },
+        { value: 300, cost: 60 },
+        { value: 200, cost: 70 },
+        { value: 100, cost: 80 },
       ],
       format: (v) => `${Math.round(v)}ms`,
     },
@@ -200,11 +202,11 @@ class TowerDefenseGame {
 
       // Initialize UI elements
       this.healthElement = document.getElementById("health-value");
-      this.pointsElement = document.getElementById("points-value");
+      this.pointsElement = document.getElementById("energy-value");
       this.waveElement = document.getElementById("wave-value");
       this.upgradeScreen = document.getElementById("upgrade-screen");
       this.blurElement = document.getElementById("blur");
-      this.upgradePointsElement = document.getElementById("upgrade-points");
+      this.upgradePointsElement = document.getElementById("upgrade-energy");
       this.upgradeListElement = document.getElementById("upgrade-list");
       this.restartButton = document.getElementById("restart-btn");
       this.winPopup = document.getElementById("win-popup");
@@ -236,6 +238,7 @@ class TowerDefenseGame {
       const helpPopup = document.getElementById("help-popup");
       const closeHelpBtn = document.getElementById("close-help");
       const helpBlur = document.getElementById("help-blur");
+      const helpResetBtn = document.getElementById("help-reset-btn");
 
       if (helpBtn && helpPopup) {
         helpBtn.addEventListener("click", () => {
@@ -258,11 +261,22 @@ class TowerDefenseGame {
         });
       }
 
+      if (helpResetBtn) {
+        helpResetBtn.addEventListener("click", () => {
+          this.resetAllProgress();
+        });
+      }
+
       // Load persisted upgrade state
       this.loadUpgradeState();
       this.loadPoints();
       this.loadShopVisits();
       this.applyUpgradeEffects();
+
+      // Initialize towers + register their targetFound/targetLost listeners ASAP.
+      // This prevents missing targetFound if the marker is already in view when MindAR starts.
+      this.initializeTowersFromUpgrades();
+      this.registerTowerEventListeners();
 
       if (this.scene.hasLoaded) {
         this.setupGame();
@@ -321,12 +335,6 @@ class TowerDefenseGame {
       return;
     }
 
-    // Apply upgrades to runtime stats before initializing towers
-    this.applyUpgradeEffects();
-
-    // Initialize towers based on upgrade level
-    this.initializeTowersFromUpgrades();
-
     console.log("Tower Defense Game initialized");
 
     this.baseTarget.addEventListener("targetFound", () => {
@@ -338,22 +346,30 @@ class TowerDefenseGame {
       this.stopEnemySpawning(false);
     });
 
-    // Register events for each tower instance
-    this.registerTowerEventListeners();
-
     this.startGameLoop();
   }
 
   private registerTowerEventListeners() {
     this.towers.forEach((tower) => {
+      // Avoid double-registering listeners if this method is called more than once.
+      // (We intentionally keep this simple: if already registered, the events will just be duplicated,
+      // so we guard by removing and re-adding isn't trivial here. We instead rely on early init calling this once.)
       tower.target.addEventListener("targetFound", () => {
-        // Force into moving state on first appearance to ensure proper initialization
+        this.towerTrackedTargets.add(tower.target);
+        this.towerLostTimes.delete(tower.target);
+
+        // Force into building/moving state on appearance
         tower.isMoving = true;
         tower.lastMovementTime = 0;
-        this.setupTowerVisualsForTower(tower);
         tower.homePosition = null;
+        tower.lastPosition = null;
+
+        this.setupTowerVisualsForTower(tower);
       });
+
       tower.target.addEventListener("targetLost", () => {
+        this.towerTrackedTargets.delete(tower.target);
+        this.towerLostTimes.set(tower.target, Date.now());
         this.handleTowerLostForTower(tower);
       });
     });
@@ -743,9 +759,7 @@ class TowerDefenseGame {
       if (this.isTowerVisible(tower) && this.isBaseVisible()) {
         this.checkTowerMovementForTower(tower);
       }
-      if (!tower.isMoving) {
-        this.checkTowerAttacksForTower(tower);
-      }
+      this.checkTowerAttacksForTower(tower);
     });
 
     this.enemies.forEach((enemy, enemyId) => {
@@ -800,9 +814,42 @@ class TowerDefenseGame {
   }
 
   private isTowerVisible(tower: TowerInstance): boolean {
-    return (
-      tower.target && tower.target.object3D && tower.target.object3D.visible
-    );
+    // Only treat a tower as visible if we've actually seen MindAR's targetFound for it.
+    if (!tower.target || !this.towerTrackedTargets.has(tower.target)) {
+      return false;
+    }
+
+    if (!tower.target.object3D || !tower.target.object3D.visible) {
+      return false;
+    }
+
+    // Check if tower was recently lost (within grace period)
+    const lostTime = this.towerLostTimes.get(tower.target);
+    if (lostTime && Date.now() - lostTime < this.TOWER_LOST_GRACE_PERIOD) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private isTowerReadyToAttack(tower: TowerInstance): boolean {
+    // Tower must be visible
+    if (!this.isTowerVisible(tower)) {
+      return false;
+    }
+
+    // Tower must have been found and stabilized at least once
+    // (homePosition is null until first targetFound + movement check completes)
+    if (!tower.homePosition) {
+      return false;
+    }
+
+    // Tower must not be currently moving
+    if (tower.isMoving) {
+      return false;
+    }
+
+    return true;
   }
 
   private getMarkerWorldPosition(marker: any): Position2D | null {
@@ -821,7 +868,7 @@ class TowerDefenseGame {
   }
 
   private checkTowerAttacksForTower(tower: TowerInstance) {
-    if (!this.isTowerVisible(tower)) {
+    if (!this.isTowerReadyToAttack(tower)) {
       return;
     }
     const now = Date.now();
@@ -893,9 +940,15 @@ class TowerDefenseGame {
 
     const towerPos = this.getTowerPositionForTower(tower);
 
-    if (!towerPos) {
+    if (!towerPos || !this.isTowerReadyToAttack(tower)) {
       return;
     }
+
+    console.log(
+      `Tower at (${towerPos.x.toFixed(2)}, ${towerPos.y.toFixed(
+        2,
+      )}) shooting enemy at (${enemyPos.x.toFixed(2)}, ${enemyPos.y.toFixed(2)})`,
+    );
 
     const lineEntity = document.createElement("a-entity");
 
@@ -942,7 +995,19 @@ class TowerDefenseGame {
       tower.target.querySelector("a-tetrahedron");
     tower.circle = tower.target.querySelector("a-circle");
 
-    // Deactivate tower body (hide sphere, show "BUILDING..." text)
+    // Ensure range circle reflects current upgrades immediately.
+    if (tower.circle) {
+      const rangeFactor = this.towerRange / this.TOWER_BASE_RANGE;
+      const radius = this.TOWER_BASE_RADIUS * rangeFactor;
+      tower.circle.setAttribute("radius", radius.toString());
+      tower.circle.setAttribute("opacity", "0.1");
+      tower.circle.setAttribute("visible", "true");
+      if (tower.isMoving) {
+        tower.circle.setAttribute("color", "#000000");
+      }
+    }
+
+    // Deactivate tower visuals to show BUILDING... and hide body
     this.setTowerActiveForTower(tower, false);
   }
 
@@ -979,7 +1044,11 @@ class TowerDefenseGame {
     const currentTime = Date.now();
 
     if (!tower.homePosition) {
-      // Establish initial home position
+      // Establish initial home position.
+      // We keep tower.isMoving=true from targetFound, so the next frame will run the moving/stability logic.
+      if (!tower.sphere || !tower.circle) {
+        return;
+      }
       tower.homePosition = { ...currentPosition };
       tower.lastMovementTime = currentTime;
       return;
@@ -1543,7 +1612,7 @@ class TowerDefenseGame {
   private purchaseUpgrade(upgradeId: UpgradeId, cost: number) {
     // Check if player has enough points
     if (this.points < cost) {
-      console.warn(`Not enough points for ${upgradeId}`);
+      console.warn(`Not enough energy for ${upgradeId}`);
       return;
     }
 
