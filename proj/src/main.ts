@@ -31,6 +31,7 @@ type UpgradeId =
   | "range"
   | "base-health"
   | "fire-rate"
+  | "rebuild-speed"
   | "wave-skip";
 
 interface UpgradeLevel<T = number> {
@@ -92,7 +93,8 @@ class TowerDefenseGame {
 
   // Tower state tracking (per-tower handled via towers[])
   private readonly MOVEMENT_THRESHOLD = 0.3;
-  private readonly STABILITY_TIME = 2000;
+  private readonly STABILITY_BASE_TIME = 3000;
+  private towerStabilityTimeMs = this.STABILITY_BASE_TIME;
   private towerLostTimes: Map<any, number> = new Map(); // Track when each tower was last lost
   private readonly TOWER_LOST_GRACE_PERIOD = 100; // ms to wait after targetLost before allowing attacks again
   private towerTrackedTargets: WeakSet<any> = new WeakSet();
@@ -184,6 +186,23 @@ class TowerDefenseGame {
         { value: 500, cost: 50 },
         { value: 300, cost: 60 },
         { value: 200, cost: 70 },
+        { value: 100, cost: 80 },
+      ],
+      format: (v) => `${Math.round(v)}ms`,
+    },
+    {
+      id: "rebuild-speed",
+      name: "Rebuild Speed",
+      desc: "Towers stabilize faster after moving",
+      levels: [
+        { value: 3000, cost: 0 },
+        { value: 2500, cost: 10 },
+        { value: 2000, cost: 20 },
+        { value: 1500, cost: 30 },
+        { value: 1000, cost: 40 },
+        { value: 750, cost: 50 },
+        { value: 500, cost: 60 },
+        { value: 250, cost: 70 },
         { value: 100, cost: 80 },
       ],
       format: (v) => `${Math.round(v)}ms`,
@@ -1183,9 +1202,9 @@ class TowerDefenseGame {
         const timeSinceStabilizationStarted =
           currentTime - tower.lastMovementTime;
         const timeRemaining =
-          this.STABILITY_TIME - timeSinceStabilizationStarted;
+          this.towerStabilityTimeMs - timeSinceStabilizationStarted;
 
-        if (timeSinceStabilizationStarted >= this.STABILITY_TIME) {
+        if (timeSinceStabilizationStarted >= this.towerStabilityTimeMs) {
           tower.homePosition = { ...currentPosition };
           tower.isMoving = false;
           if (tower.circle) {
@@ -1194,9 +1213,10 @@ class TowerDefenseGame {
           this.setTowerActiveForTower(tower, true);
           tower.lastMovementTime = 0;
         } else {
-          this.updateMovingText(
-            Math.ceil(100 - (timeRemaining / this.STABILITY_TIME) * 100) + "%",
+          const pct = Math.ceil(
+            100 - (timeRemaining / this.towerStabilityTimeMs) * 100,
           );
+          this.updateMovingText(pct);
         }
       } else {
         if (tower.lastMovementTime > 0) {
@@ -1208,13 +1228,12 @@ class TowerDefenseGame {
     tower.lastPosition = { ...currentPosition };
   }
 
-  private updateMovingText(percentageRemaining: string) {
+  private updateMovingText(percentComplete: number) {
     this.towers.forEach((tower) => {
       if (!tower.buildRing) return;
 
-      const pct = parseInt(percentageRemaining.replace(/[^0-9]/g, ""), 10);
-      const clamped = Number.isFinite(pct)
-        ? Math.max(0, Math.min(100, pct))
+      const clamped = Number.isFinite(percentComplete)
+        ? Math.max(0, Math.min(100, percentComplete))
         : 0;
       const thetaLength = (clamped / 100) * 360;
       tower.buildRing.setAttribute("theta-length", thetaLength);
@@ -1554,6 +1573,18 @@ class TowerDefenseGame {
       const raw = window.localStorage.getItem(this.UPGRADE_STORAGE_KEY);
       if (raw) {
         this.upgradeState = JSON.parse(raw);
+
+        // Migrate: ensure newly-added upgrades exist in state
+        let changed = false;
+        this.upgradeDefs.forEach((def) => {
+          if (this.upgradeState[def.id] === undefined) {
+            this.upgradeState[def.id] = 0;
+            changed = true;
+          }
+        });
+        if (changed) {
+          this.saveUpgradeState();
+        }
       } else {
         this.upgradeState = this.upgradeDefs.reduce<UpgradeState>(
           (acc, def) => {
@@ -1638,6 +1669,12 @@ class TowerDefenseGame {
     this.towerFireRateMs = this.getUpgradeCurrentValueById("fire-rate");
     this.defaultBaseHealth = this.getUpgradeCurrentValueById("base-health");
 
+    const rebuildMs = this.getUpgradeCurrentValueById("rebuild-speed");
+    this.towerStabilityTimeMs = Math.max(
+      200,
+      Math.round(rebuildMs || this.STABILITY_BASE_TIME),
+    );
+
     // Sync existing towers to latest stats
     this.towers.forEach((tower) => {
       tower.range = this.towerRange;
@@ -1698,7 +1735,7 @@ class TowerDefenseGame {
       progressBarHTML += "</div>";
 
       const item = document.createElement("div");
-      item.className = "upgrade-item";
+      item.className = maxLevelReached ? "upgrade-item maxed" : "upgrade-item";
       item.innerHTML = `
         <div class=\"upgrade-header\">
           <span class=\"upgrade-name\">${def.name}</span>

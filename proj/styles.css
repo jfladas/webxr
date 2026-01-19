@@ -329,6 +329,15 @@
     color: white;
 }
 
+.upgrade-item.maxed {
+    background: rgba(248, 52, 155, 0.15);
+    box-shadow: 0 0 0 1px rgba(248, 52, 155, 0.55) inset;
+}
+
+.upgrade-item.maxed .upgrade-cost {
+    color: #F8349B;
+}
+
 .upgrade-header {
     display: flex;
     justify-content: space-between;
@@ -386,8 +395,17 @@
     transition: all 0.3s ease;
 }
 
+.upgrade-item.maxed .progress-segment {
+    background: rgba(248, 52, 155, 0.25);
+    border-color: #F8349B;
+}
+
 .progress-segment.filled {
     background-color: #6600FF;
+}
+
+.upgrade-item.maxed .progress-segment.filled {
+    background-color: #F8349B;
 }
 
 .upgrade-btn {
@@ -403,9 +421,18 @@
     transition: all 0.2s ease;
 }
 
+.upgrade-item.maxed .upgrade-btn {
+    background: #F8349B;
+}
+
 .upgrade-btn:disabled {
     cursor: not-allowed;
     opacity: 0.3;
+}
+
+.upgrade-item.maxed .upgrade-btn:disabled {
+    opacity: 1;
+    cursor: default;
 }
 
 #button-group {
