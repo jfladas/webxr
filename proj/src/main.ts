@@ -1754,7 +1754,7 @@ class TowerDefenseGame {
           btnText = "Max";
           disabled = true;
         } else if (this.points < nextCost) {
-          btnText = "Not enough points";
+          btnText = "Not enough energy";
           disabled = true;
         }
         btn.textContent = btnText;
