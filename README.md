@@ -1,3 +1,3 @@
 # webxr
-*Module MATBF DI FS24*
+*Module WEBXR DI HS25*
 ### [AR Tower Defense](https://webxr.jfladas.com/)
